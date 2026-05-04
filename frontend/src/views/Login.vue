@@ -85,6 +85,13 @@ const loginRules: FormRules = {
   ]
 }
 
+const getDefaultHomePath = (roles: string[]) => {
+  if (roles.includes('admin')) return '/admin/dashboard'
+  if (roles.includes('teacher')) return '/teacher/dashboard'
+  if (roles.includes('student')) return '/student/dashboard'
+  return '/'
+}
+
 const handleLogin = async () => {
   if (!loginFormRef.value) return
   
@@ -113,7 +120,7 @@ const handleLogin = async () => {
         if (redirect) {
           router.push(redirect)
         } else {
-          router.push('/')
+          router.push(getDefaultHomePath(userInfoWithRoles.roles))
         }
       } catch (error: any) {
         ElMessage.error(error.message || '登录失败')
