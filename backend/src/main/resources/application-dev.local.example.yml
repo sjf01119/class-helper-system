@@ -1,0 +1,6 @@
+aliyun:
+  oss:
+    endpoint: oss-cn-hangzhou.aliyuncs.com
+    accessKeyId: your-access-key-id
+    accessKeySecret: your-access-key-secret
+    bucketName: your-bucket-name

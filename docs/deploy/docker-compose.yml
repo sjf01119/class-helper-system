@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: class-helper-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: class_helper_db
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/init_database.sql:/docker-entrypoint-initdb.d/1-init.sql
+      - ./sql/update_teacher_features.sql:/docker-entrypoint-initdb.d/2-features.sql
+    ports:
+      - "3306:3306"
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - class-helper-network
+
+  backend:
+    build:
+      context: ./class-helper-backend
+      dockerfile: Dockerfile
+    container_name: class-helper-backend
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_DB=class_helper_db
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root
+      - CORS_ALLOWED_ORIGINS=*
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - class-helper-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./class-helper-frontend
+      dockerfile: Dockerfile
+    container_name: class-helper-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - class-helper-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+
+networks:
+  class-helper-network:
+    driver: bridge

@@ -1,0 +1,156 @@
+spring:
+  profiles:
+    active: dev
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+    import: optional:classpath:application-dev.local.yml
+
+  main:
+    allow-circular-references: true
+
+  application:
+    name: class-helper-backend
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/class_helper_db?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    hikari:
+      connection-init-sql: "SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci"
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+  sql:
+    init:
+      mode: never
+      schema-locations: classpath:/schema.sql
+      data-locations: classpath:/data.sql
+    continue-on-error: true
+
+  jpa:
+    defer-datasource-initialization: true
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+cors:
+  allowed-origins: "*"
+
+jwt:
+  secret: your-secret-key-256bit-long-enough-for-jwt-signing
+  expiration: 86400000
+
+aliyun:
+  oss:
+    endpoint: ${ALIYUN_OSS_ENDPOINT:oss-cn-hangzhou.aliyuncs.com}
+    accessKeyId: ${ALIYUN_OSS_ACCESS_KEY_ID:local-placeholder-access-key}
+    accessKeySecret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:local-placeholder-access-secret}
+    bucketName: ${ALIYUN_OSS_BUCKET_NAME:local-placeholder-bucket}
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+    cache-enabled: true
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.example.classhelper.entity
+
+logging:
+  level:
+    com.example.classhelper.mapper: debug
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{50} - %msg%n"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:class_helper_db}?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci&useSSL=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      connection-init-sql: "SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci"
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+  sql:
+    init:
+      mode: never
+      schema-locations: classpath:/schema.sql
+      data-locations: classpath:/data.sql
+      continue-on-error: true
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+    map-underscore-to-camel-case: true
+    cache-enabled: true
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.example.classhelper.entity
+
+server:
+  port: 8080
+
+cors:
+  allowed-origins: http://localhost:80,http://your-domain.com
+
+logging:
+  level:
+    root: warn
+    com.example.classhelper: info
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{50} - %msg%n"
+  file:
+    name: logs/class-helper.log
