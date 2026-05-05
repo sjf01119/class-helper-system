@@ -141,21 +141,16 @@ public class AuthController {
             throw new BusinessException("用户名已被注册");
         }
 
-        com.example.classhelper.entity.Clazz clazz = null;
-        LambdaQueryWrapper<com.example.classhelper.entity.Clazz> inviteWrapper = new LambdaQueryWrapper<>();
-        inviteWrapper.eq(com.example.classhelper.entity.Clazz::getInviteCode, registerDTO.getInviteCode());
-        inviteWrapper.eq(com.example.classhelper.entity.Clazz::getStatus, 1);
-        clazz = clazzService.getOne(inviteWrapper);
-        if (clazz == null) {
-            throw new BusinessException("邀请码无效，请检查班级邀请码是否正确");
-        }
-
         User user = new User();
         user.setUsername(registerDTO.getUsername());
         user.setPassword(passwordEncoder.encode(registerDTO.getPassword()));
-        user.setRealName(registerDTO.getRealName());
-        user.setNickname(registerDTO.getRealName());
-        user.setClassId(clazz.getId());
+        String displayName = registerDTO.getRealName();
+        if (displayName == null || displayName.trim().isEmpty()) {
+            displayName = registerDTO.getUsername();
+        }
+        user.setRealName(displayName);
+        user.setNickname(displayName);
+        user.setPhone(registerDTO.getPhone());
         user.setStatus(1);
 
         boolean saved = userService.save(user);
@@ -173,11 +168,7 @@ public class AuthController {
             userRoleService.save(userRole);
         }
 
-        // 更新班级当前人数
-        clazz.setCurrentCount(clazz.getCurrentCount() + 1);
-        clazzService.updateById(clazz);
-
-        log.info("学生注册成功: {}, 班级: {}", registerDTO.getUsername(), clazz.getClassName());
+        log.info("学生注册成功: {}", registerDTO.getUsername());
         return R.ok("注册成功，请登录", null);
     }
 

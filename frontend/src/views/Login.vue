@@ -2,7 +2,6 @@
   <AuthPageLayout
     title="学习辅助系统"
     subtitle="校园学习协同平台登录入口"
-    note-title="测试账号"
     link-text="没有账号？"
     link-label="学生注册"
     link-to="/register"
@@ -18,7 +17,7 @@
       <el-form-item prop="username">
         <el-input
           v-model="loginForm.username"
-          placeholder="请输入账号"
+          placeholder="请输入用户名"
           :prefix-icon="User"
           size="large"
         />
@@ -46,11 +45,7 @@
       </el-form-item>
     </el-form>
 
-    <template #note>
-      <p>管理员：admin / 123456</p>
-      <p>教师：teacher1 / 123456</p>
-      <p>学生：student1 / 123456</p>
-    </template>
+   
   </AuthPageLayout>
 </template>
 
@@ -61,6 +56,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import AuthPageLayout from '@/components/auth/AuthPageLayout.vue'
 import { useUserStore } from '@/stores/user'
+import { getDefaultHomePathByScope, resolveLoginRoleScope } from '@/utils/auth'
 import request from '@/utils/request'
 
 const router = useRouter()
@@ -85,13 +81,6 @@ const loginRules: FormRules = {
   ]
 }
 
-const getDefaultHomePath = (roles: string[]) => {
-  if (roles.includes('admin')) return '/admin/dashboard'
-  if (roles.includes('teacher')) return '/teacher/dashboard'
-  if (roles.includes('student')) return '/student/dashboard'
-  return '/'
-}
-
 const handleLogin = async () => {
   if (!loginFormRef.value) return
   
@@ -104,23 +93,23 @@ const handleLogin = async () => {
           password: loginForm.password
         })
         
-        // 保存token和用户信息
-        userStore.setToken(res.token)
-        
         // 合并用户信息，包含roles
         const userInfoWithRoles = {
           ...res.userInfo,
           roles: res.roles || []
         }
+        const redirect = route.query.redirect as string | undefined
+        const loginScope = resolveLoginRoleScope(userInfoWithRoles.roles, redirect)
+
+        userStore.setToken(res.token, loginScope)
         userStore.setUserInfo(userInfoWithRoles)
         
         ElMessage.success('登录成功')
-        
-        const redirect = route.query.redirect as string
+
         if (redirect) {
           router.push(redirect)
         } else {
-          router.push(getDefaultHomePath(userInfoWithRoles.roles))
+          router.push(getDefaultHomePathByScope(loginScope))
         }
       } catch (error: any) {
         ElMessage.error(error.message || '登录失败')

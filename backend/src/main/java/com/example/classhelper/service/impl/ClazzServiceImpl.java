@@ -81,6 +81,10 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
 
     @Override
     public boolean add(ClazzDTO dto) {
+        if (dto.getTeacherId() == null) {
+            throw new BusinessException("请选择班主任");
+        }
+
         // 检查班级名称是否已存在
         LambdaQueryWrapper<Clazz> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Clazz::getClassName, dto.getClassName());
@@ -127,7 +131,9 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
 
         clazz.setClassName(dto.getClassName());
         clazz.setDescription(StringUtils.hasText(dto.getDescription()) ? dto.getDescription().trim() : null);
-        clazz.setTeacherId(dto.getTeacherId());
+        if (dto.getTeacherId() != null) {
+            clazz.setTeacherId(dto.getTeacherId());
+        }
         clazz.setStatus(dto.getStatus());
         clazz.setUpdatedAt(LocalDateTime.now());
         return this.updateById(clazz);

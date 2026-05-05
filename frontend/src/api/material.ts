@@ -1,6 +1,6 @@
 import axios from 'axios'
 import request from '@/utils/request'
-import { useUserStore } from '@/stores/user'
+import { getScopeFromPath, getScopedToken } from '@/utils/auth'
 
 // 资料查询参数
 export interface MaterialQueryParams {
@@ -80,12 +80,12 @@ export const previewMaterial = (id: number) => {
 
 // 下载资料文件
 export const downloadMaterialFile = async (id: number) => {
-  const userStore = useUserStore()
+  const token = getScopedToken(getScopeFromPath(window.location.pathname))
   return axios.get(`/api/resource/${id}/download`, {
     responseType: 'blob',
-    headers: userStore.token
+    headers: token
       ? {
-          Authorization: `Bearer ${userStore.token}`
+          Authorization: `Bearer ${token}`
         }
       : undefined
   })

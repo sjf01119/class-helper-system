@@ -242,7 +242,7 @@ const formRules = {
   ],
   content: [
     { required: true, message: '请输入公告内容', trigger: 'blur' },
-    { min: 10, max: 2000, message: '长度在 10 到 2000 个字符', trigger: 'blur' }
+    { min: 5, max: 2000, message: '长度在 5 到 2000 个字符', trigger: 'blur' }
   ],
   classId: [
     { required: true, message: '请选择发布班级', trigger: 'change', validator: (_rule: any, value: any, callback: any) => {
@@ -367,7 +367,11 @@ const handleStatusChange = async (row: Announcement, val: number) => {
       isTop: row.isTop,
       status: val
     } as Announcement)
-    ElMessage.success(val === 1 ? '已发布' : '已下架')
+    if (val === 1) {
+      ElMessage.success('已发布')
+    } else {
+      ElMessage.error('已下架')
+    }
   } catch (error) {
     row.status = val === 1 ? 0 : 1
     console.error('状态更新失败', error)
@@ -379,7 +383,7 @@ const handleDelete = (row: Announcement) => {
     type: 'warning'
   }).then(async () => {
     await deleteAnnouncement(row.id!)
-    ElMessage.success('删除成功')
+    ElMessage.error('删除成功')
     loadAnnouncementList()
   }).catch(() => {})
 }

@@ -271,10 +271,9 @@ import {
   type AttachmentItem,
   type HomeworkVO
 } from '@/api/homework'
-import { useUserStore } from '@/stores/user'
+import { getScopeFromPath, getScopedToken } from '@/utils/auth'
 
 const route = useRoute()
-const userStore = useUserStore()
 
 // 标签页
 const activeTab = ref('pending')
@@ -327,9 +326,10 @@ const submitForm = reactive({
 const uploadRef = ref()
 const fileList = ref<UploadFile[]>([])
 const uploadedAttachmentList = ref<AttachmentItem[]>([])
-const uploadHeaders = computed(() => ({
-  Authorization: `Bearer ${userStore.token}`
-}))
+const uploadHeaders = computed(() => {
+  const token = getScopedToken(getScopeFromPath(window.location.pathname))
+  return token ? { Authorization: `Bearer ${token}` } : {}
+})
 
 const resolveAccessUrl = (url?: string) => {
   if (!url) return ''

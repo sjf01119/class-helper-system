@@ -18,9 +18,9 @@ public class RegisterDTO {
     @NotBlank(message = "确认密码不能为空")
     private String confirmPassword;
 
-    @NotBlank(message = "真实姓名不能为空")
     private String realName;
 
-    @NotBlank(message = "班级邀请码不能为空")
+    private String phone;
+
     private String inviteCode;
 }

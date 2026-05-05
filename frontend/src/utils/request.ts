@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getScopeFromPath, getScopedToken } from '@/utils/auth'
 
 interface ApiResponse<T = any> {
   code: number
@@ -40,8 +41,8 @@ const instance: AxiosInstance = axios.create({
 // 请求拦截器
 instance.interceptors.request.use(
   (config) => {
-    const userStore = useUserStore()
-    const token = userStore.token
+    const scope = getScopeFromPath(window.location.pathname)
+    const token = getScopedToken(scope)
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }

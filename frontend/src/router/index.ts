@@ -1,4 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+import {
+  clearActiveRoleScope,
+  clearScopedToken,
+  getActiveRoleScope,
+  getDefaultHomePathByScope,
+  getScopeFromPath,
+  getScopedToken,
+  normalizeRoleScope,
+  setActiveRoleScope,
+  type RoleScope
+} from '@/utils/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -217,10 +229,9 @@ const router = createRouter({
 })
 
 const PUBLIC_PATHS = ['/', '/login', '/register']
+const AUTH_PAGE_PATHS = ['/login', '/register']
 
 const isPublicRoute = (path: string) => PUBLIC_PATHS.includes(path)
-
-const getLoginToken = () => localStorage.getItem('token') || ''
 
 const decodeTokenPayload = (token: string) => {
   try {
@@ -250,13 +261,24 @@ const getTokenRoles = (token: string): string[] => {
   return normalizeRoles(payload?.roles)
 }
 
+const getRedirectPath = (value: unknown) => {
+  return typeof value === 'string' ? value : ''
+}
+
+const resolveCurrentScope = (path: string, redirectPath?: string): RoleScope | null => {
+  return getScopeFromPath(path) || getScopeFromPath(redirectPath) || getActiveRoleScope()
+}
+
 // 全局前置守卫：
 // 1. 公开页面（/、/login、/register）直接放行
 // 2. 未登录访问 requiresAuth 页面时，跳转到 /login 并记录 redirect
 // 3. 已登录访问 /login 或 /register 时，强制跳回首页 /
 // 4. 已登录访问受保护页面时，同时校验 token 和 meta.roles，禁止串后台
 router.beforeEach((to, _from, next) => {
-  const token = getLoginToken()
+  const userStore = useUserStore()
+  const redirectPath = getRedirectPath(to.query.redirect)
+  const currentScope = resolveCurrentScope(to.path, redirectPath)
+  const token = currentScope ? getScopedToken(currentScope) : ''
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   const requiredRoles = to.matched
     .flatMap(record => {
@@ -265,9 +287,14 @@ router.beforeEach((to, _from, next) => {
     })
   const currentRoles = getTokenRoles(token)
 
+  if (getScopeFromPath(to.path)) {
+    setActiveRoleScope(getScopeFromPath(to.path))
+  }
+  userStore.syncToken(to.path)
+
   // 已登录用户不允许重复进入认证页面
-  if ((to.path === '/login' || to.path === '/register') && token) {
-    next('/')
+  if (AUTH_PAGE_PATHS.includes(to.path) && token && currentScope) {
+    next(redirectPath || getDefaultHomePathByScope(currentScope))
     return
   }
 
@@ -290,7 +317,8 @@ router.beforeEach((to, _from, next) => {
 
   // token 存在但无法解析出合法角色时，视为无效登录态
   if (requiresAuth && currentRoles.length === 0) {
-    localStorage.removeItem('token')
+    clearScopedToken(currentScope)
+    clearActiveRoleScope()
     next({
       path: '/login',
       query: {
@@ -302,7 +330,7 @@ router.beforeEach((to, _from, next) => {
 
   // 已登录后只能访问自己角色对应的后台页面，禁止越权和串后台
   if (requiredRoles.length > 0) {
-    const hasPermission = requiredRoles.some(role => currentRoles.includes(role))
+    const hasPermission = requiredRoles.some(role => currentRoles.includes(normalizeRoleScope(role) || role))
     if (!hasPermission) {
       next('/')
       return

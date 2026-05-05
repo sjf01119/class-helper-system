@@ -142,7 +142,7 @@
               <el-button text size="small" @click="toggleAnnouncementExpanded">
                 {{ showAllAnnouncements ? '收起公告' : '查看全部公告' }}
               </el-button>
-              <el-button type="primary" plain size="small" @click="loadAnnouncements">
+              <el-button @click="loadAnnouncements">
                 <el-icon><RefreshRight /></el-icon>
                 刷新
               </el-button>
@@ -516,7 +516,7 @@ const displayAnnouncementList = computed(() => {
   if (showAllAnnouncements.value) {
     return announcementList.value
   }
-  return announcementList.value.slice(0, 4)
+  return announcementList.value.slice(0, 3)
 })
 
 const memberEmptyDescription = computed(() => {

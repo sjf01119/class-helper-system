@@ -8,12 +8,7 @@
           <div class="course-subtitle">
             <span>{{ courseDetail?.className || '未关联班级' }}</span>
             <span>{{ teacherName }}</span>
-            <span>开课时间：{{ formatDateTime(courseDetail?.startTime || courseDetail?.createdAt || courseDetail?.createTime) }}</span>
           </div>
-        </div>
-        <div class="quick-actions">
-          <el-button type="primary" @click="goHomeworkManage">作业管理</el-button>
-          <el-button @click="goStudentTab">查看学生</el-button>
         </div>
       </div>
 
@@ -310,18 +305,6 @@ const goBack = () => {
   router.push('/teacher/my-course')
 }
 
-const goHomeworkManage = () => {
-  router.push({
-    path: '/teacher/homework',
-    query: { courseId: String(courseId.value) }
-  })
-}
-
-const goStudentTab = () => {
-  activeTab.value = 'students'
-  handleTabChange('students')
-}
-
 const parseRate = (value?: string | number | null) => {
   if (value === null || value === undefined) return null
   const parsed = Number(String(value).replace(/%/g, '').trim())
@@ -333,8 +316,8 @@ const normalizeRateText = (value?: string | number | null) => {
   return parsed === null ? '0.0' : parsed.toFixed(1)
 }
 
-const formatDateTime = (value?: string) => {
-  if (!value) return '待设置'
+const formatDateTime = (value?: string | null) => {
+  if (!value) return ''
   const normalized = value.replace('T', ' ')
   return normalized.slice(0, 19)
 }
@@ -398,8 +381,11 @@ onMounted(async () => {
 .card-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 16px;
+}
+
+.overview-top {
+  flex-direction: column;
 }
 
 .course-title {
@@ -414,12 +400,6 @@ onMounted(async () => {
   gap: 10px 16px;
   color: #7f8ca8;
   font-size: 13px;
-}
-
-.quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
 }
 
 .metric-grid {

@@ -151,7 +151,7 @@ const handleCommand = (command: string) => {
       type: 'warning'
     }).then(() => {
       userStore.logout()
-      ElMessage.success('退出成功')
+      ElMessage.error('退出成功')
       router.push('/login')
     }).catch(() => {})
   }
@@ -186,6 +186,10 @@ const handleCommand = (command: string) => {
 .admin-shell :deep(.app-page-meta__subtitle) {
   font-size: 13px;
   line-height: 1.5;
+}
+
+.admin-shell :deep(.app-brand__subtitle) {
+  font-size: 10px;
 }
 
 .admin-shell :deep(.app-user-trigger) {

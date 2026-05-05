@@ -233,7 +233,7 @@ const formRules = {
   ],
   content: [
     { required: true, message: '请输入公告内容', trigger: 'blur' },
-    { min: 10, max: 2000, message: '长度在 10 到 2000 个字符', trigger: 'blur' }
+    { min: 5, max: 2000, message: '长度在 5 到 2000 个字符', trigger: 'blur' }
   ],
   classId: [
     { required: true, message: '请选择发布班级', trigger: 'change' }
@@ -360,7 +360,7 @@ const handleDelete = (row: Announcement) => {
     type: 'warning'
   }).then(async () => {
     await deleteAnnouncement(row.id!)
-    ElMessage.success('删除成功')
+    ElMessage.error('删除成功')
     loadAnnouncementList()
   }).catch(() => {})
 }

@@ -197,10 +197,6 @@
                     <span class="meta-item__value">{{ course.studentCount ?? 0 }} 人</span>
                   </div>
                   <div class="meta-item">
-                    <span class="meta-item__label">开课时间</span>
-                    <span class="meta-item__value">{{ formatDate(course.startTime || course.createdAt || course.createTime) }}</span>
-                  </div>
-                  <div class="meta-item">
                     <span class="meta-item__label">学分 / 课时</span>
                     <span class="meta-item__value">{{ course.credit ?? 2 }} 学分 / {{ course.courseHours ?? 32 }} 课时</span>
                   </div>
@@ -310,28 +306,6 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="开课时间" prop="startTime">
-                  <el-date-picker
-                    v-model="formData.startTime"
-                    type="datetime"
-                    placeholder="请选择开课时间"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    style="width: 100%"
-                  />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="结课时间" prop="endTime">
-                  <el-date-picker
-                    v-model="formData.endTime"
-                    type="datetime"
-                    placeholder="课程结课时自动同步，可手动调整"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    style="width: 100%"
-                  />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
                 <el-form-item label="学分" prop="credit">
                   <el-input-number v-model="formData.credit" :min="0" :max="20" style="width: 100%" />
                 </el-form-item>
@@ -433,27 +407,12 @@ const formData = reactive<CourseDTO>({
   courseHours: 32,
   description: '',
   coverUrl: '',
-  status: 1,
-  startTime: '',
-  endTime: ''
+  status: 1
 })
-
-const validateEndTime = (_rule: unknown, value: string | undefined, callback: (error?: Error) => void) => {
-  if (!value || !formData.startTime) {
-    callback()
-    return
-  }
-  if (new Date(value).getTime() < new Date(formData.startTime).getTime()) {
-    callback(new Error('结课时间不能早于开课时间'))
-    return
-  }
-  callback()
-}
 
 const formRules: FormRules = {
   courseName: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
-  classId: [{ required: true, message: '请选择所属班级', trigger: 'change' }],
-  endTime: [{ validator: validateEndTime, trigger: 'change' }]
+  classId: [{ required: true, message: '请选择所属班级', trigger: 'change' }]
 }
 
 const teacherName = computed(() => userStore.userInfo?.realName || '当前教师')
@@ -615,9 +574,7 @@ const resetFormData = () => {
     courseHours: 32,
     description: '',
     coverUrl: '',
-    status: 1,
-    startTime: '',
-    endTime: ''
+    status: 1
   })
   coverPreviewUrl.value = ''
 }
@@ -638,9 +595,7 @@ const openEditDialog = (course: CourseVO) => {
     courseHours: course.courseHours ?? 32,
     description: course.description || '',
     coverUrl: course.coverUrl || '',
-    status: course.status,
-    startTime: normalizeDateValue(course.startTime || course.createdAt || course.createTime),
-    endTime: normalizeDateValue(course.endTime)
+    status: course.status
   })
   coverPreviewUrl.value = course.coverUrl || ''
   dialogVisible.value = true
@@ -680,9 +635,7 @@ const handleSubmit = async () => {
     const payload: CourseDTO = {
       ...formData,
       description: formData.description?.trim() || undefined,
-      coverUrl: formData.coverUrl || undefined,
-      startTime: formData.startTime || undefined,
-      endTime: formData.endTime || undefined
+      coverUrl: formData.coverUrl || undefined
     }
     if (isEdit.value) {
       await updateCourse(payload)
@@ -727,31 +680,10 @@ const getTime = (value?: string) => {
   return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
-const formatDate = (value?: string) => {
-  if (!value) return '待设置'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '待设置'
-  return date.toLocaleDateString('zh-CN')
-}
-
-const normalizeDateValue = (value?: string) => {
-  if (!value) return ''
-  return value.replace('T', ' ').slice(0, 19)
-}
-
 watch(filteredCourses, (list) => {
   const maxPage = Math.max(1, Math.ceil(list.length / pagination.size))
   if (pagination.current > maxPage) {
     pagination.current = maxPage
-  }
-})
-
-watch(() => formData.status, (value) => {
-  if (value === 0 && !formData.endTime) {
-    formData.endTime = new Date().toLocaleString('sv-SE').replace('T', ' ')
-  }
-  if (value === 1) {
-    formData.endTime = ''
   }
 })
 

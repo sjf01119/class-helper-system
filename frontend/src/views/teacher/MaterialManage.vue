@@ -478,7 +478,7 @@ const handleDelete = (row: Material) => {
   }).then(async () => {
     try {
       await deleteMaterial(row.id)
-      ElMessage.success('删除成功')
+      ElMessage.error('删除成功')
       loadMaterialList()
     } catch (error) {
       console.error('删除失败', error)

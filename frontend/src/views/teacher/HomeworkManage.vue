@@ -670,7 +670,7 @@ const handleDelete = (row: HomeworkVO) => {
   })
     .then(async () => {
       await deleteHomework(row.id)
-      ElMessage.success('作业删除成功')
+      ElMessage.error('作业删除成功')
       loadHomeworkList()
     })
     .catch(() => {})

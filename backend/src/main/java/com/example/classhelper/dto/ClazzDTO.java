@@ -1,7 +1,6 @@
 package com.example.classhelper.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -38,7 +37,6 @@ public class ClazzDTO {
     /**
      * 班主任教师ID
      */
-    @NotNull(message = "请选择班主任")
     private Long teacherId;
 
     /**

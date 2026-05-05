@@ -1,5 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import {
+  clearActiveRoleScope,
+  clearScopedToken,
+  clearScopedUserInfo,
+  getScopedUserInfo,
+  getScopedTokenByPath,
+  getActiveRoleScope,
+  resolveScopeFromRoles,
+  setActiveRoleScope,
+  setScopedToken,
+  setScopedUserInfo,
+  type RoleScope
+} from '@/utils/auth'
 
 interface UserInfo {
   id: number
@@ -25,8 +38,9 @@ export const useUserStore = defineStore('user', () => {
   }
 
   // State
-  const token = ref<string>(localStorage.getItem('token') || '')
-  const userInfo = ref<UserInfo | null>(null)
+  const initialScope = getActiveRoleScope() || resolveScopeFromRoles([])
+  const token = ref<string>(getScopedTokenByPath(window.location.pathname))
+  const userInfo = ref<UserInfo | null>(getScopedUserInfo<UserInfo>(initialScope))
 
   // Getters
   const isLoggedIn = computed(() => !!token.value)
@@ -36,9 +50,15 @@ export const useUserStore = defineStore('user', () => {
   const isHeadTeacher = computed(() => !!userInfo.value?.isHeadTeacher)
 
   // Actions
-  const setToken = (newToken: string) => {
+  const setToken = (newToken: string, scope?: RoleScope | null) => {
+    const resolvedScope = scope || getActiveRoleScope() || resolveScopeFromRoles(userInfo.value?.roles)
+    if (!resolvedScope) {
+      token.value = newToken
+      return
+    }
+    setScopedToken(resolvedScope, newToken)
+    setActiveRoleScope(resolvedScope)
     token.value = newToken
-    localStorage.setItem('token', newToken)
   }
 
   const setUserInfo = (info: UserInfo) => {
@@ -46,13 +66,29 @@ export const useUserStore = defineStore('user', () => {
       ...info,
       roles: normalizeRoles(info.roles)
     }
+    const resolvedScope = resolveScopeFromRoles(normalizedInfo.roles) || getActiveRoleScope()
     userInfo.value = normalizedInfo
+    if (resolvedScope) {
+      setActiveRoleScope(resolvedScope)
+      setScopedUserInfo(resolvedScope, normalizedInfo)
+    }
   }
 
-  const logout = () => {
-    token.value = ''
+  const syncToken = (path?: string) => {
+    token.value = getScopedTokenByPath(path || window.location.pathname)
+    const resolvedScope = getActiveRoleScope()
+    userInfo.value = getScopedUserInfo<UserInfo>(resolvedScope)
+  }
+
+  const logout = (scope?: RoleScope | null) => {
+    const resolvedScope = scope || getActiveRoleScope() || resolveScopeFromRoles(userInfo.value?.roles)
+    clearScopedToken(resolvedScope)
+    clearScopedUserInfo(resolvedScope)
+    if (!scope || resolvedScope === getActiveRoleScope()) {
+      clearActiveRoleScope()
+    }
+    token.value = getScopedTokenByPath(window.location.pathname, false)
     userInfo.value = null
-    localStorage.removeItem('token')
   }
 
   const clearUserInfo = () => {
@@ -70,6 +106,7 @@ export const useUserStore = defineStore('user', () => {
     setToken,
     setUserInfo,
     clearUserInfo,
+    syncToken,
     logout,
   }
 })

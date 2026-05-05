@@ -1,6 +1,6 @@
 import axios from 'axios'
 import request from '@/utils/request'
-import { useUserStore } from '@/stores/user'
+import { getScopeFromPath, getScopedToken } from '@/utils/auth'
 
 export interface AttachmentItem {
   name: string
@@ -193,12 +193,12 @@ export const getHomeworkAttachmentAccessUrl = (params: {
 }
 
 export const downloadHomeworkAttachmentByUrl = async (accessUrl: string) => {
-  const userStore = useUserStore()
+  const token = getScopedToken(getScopeFromPath(window.location.pathname))
   return axios.get(accessUrl, {
     responseType: 'blob',
-    headers: userStore.token
+    headers: token
       ? {
-          Authorization: `Bearer ${userStore.token}`
+          Authorization: `Bearer ${token}`
         }
       : undefined
   })

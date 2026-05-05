@@ -324,7 +324,11 @@ const handleStatusChange = async (row: ClassVO, val: number) => {
       teacherId: row.teacherId,
       status: val
     } as ClassDTO)
-    ElMessage.success(val === 1 ? '已启用' : '已禁用')
+    if (val === 1) {
+      ElMessage.success('已启用')
+    } else {
+      ElMessage.error('已禁用')
+    }
   } catch (error) {
     row.status = val === 1 ? 0 : 1
     console.error('状态更新失败', error)
@@ -375,7 +379,7 @@ const handleDelete = (row: ClassVO) => {
     type: 'warning'
   }).then(async () => {
     await deleteClass(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.error('删除成功')
     loadClassList()
   }).catch(() => {})
 }
