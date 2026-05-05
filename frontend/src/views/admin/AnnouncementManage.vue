@@ -33,6 +33,9 @@
           <el-button type="success" @click="handleAdd">
             <el-icon><Plus /></el-icon>发布公告
           </el-button>
+          <el-button type="danger" @click="handleBatchDelete">
+            <el-icon><Delete /></el-icon>批量删除
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -45,7 +48,9 @@
         border 
         stripe
         highlight-current-row
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="55" align="center" />
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column label="标题" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
@@ -201,7 +206,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, RefreshRight, Plus, Edit, Delete, View, Timer } from '@element-plus/icons-vue'
-import { getAnnouncementPage, addAnnouncement, updateAnnouncement, deleteAnnouncement, type Announcement } from '@/api/announcement'
+import { getAnnouncementPage, addAnnouncement, updateAnnouncement, deleteAnnouncement, deleteAnnouncementBatch, type Announcement } from '@/api/announcement'
 import { getAllClasses, type ClassVO } from '@/api/class'
 
 const loading = ref(false)
@@ -209,6 +214,7 @@ const submitLoading = ref(false)
 const announcementList = ref<Announcement[]>([])
 const classList = ref<ClassVO[]>([])
 const total = ref(0)
+const selectedAnnouncements = ref<Announcement[]>([])
 
 const queryParams = reactive({
   current: 1,
@@ -386,6 +392,26 @@ const handleDelete = (row: Announcement) => {
     ElMessage.error('删除成功')
     loadAnnouncementList()
   }).catch(() => {})
+}
+
+const handleBatchDelete = () => {
+  if (selectedAnnouncements.value.length === 0) {
+    ElMessage.warning('请先选择要删除的公告')
+    return
+  }
+
+  ElMessageBox.confirm(`确定批量删除已选中的 ${selectedAnnouncements.value.length} 条公告吗？`, '提示', {
+    type: 'warning'
+  }).then(async () => {
+    await deleteAnnouncementBatch(selectedAnnouncements.value.map(item => item.id!))
+    ElMessage.success('批量删除成功')
+    selectedAnnouncements.value = []
+    loadAnnouncementList()
+  }).catch(() => {})
+}
+
+const handleSelectionChange = (selection: Announcement[]) => {
+  selectedAnnouncements.value = selection
 }
 
 const handleSizeChange = (val: number) => {

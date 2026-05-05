@@ -15,3 +15,12 @@ LEFT JOIN (
 ) tc ON tc.class_id = c.id
 SET c.teacher_id = tc.teacher_id
 WHERE c.teacher_id IS NULL;
+
+ALTER TABLE sys_class
+DROP FOREIGN KEY fk_class_teacher_id;
+
+ALTER TABLE sys_class
+MODIFY COLUMN teacher_id BIGINT UNSIGNED NULL COMMENT '班主任教师ID';
+
+ALTER TABLE sys_class
+ADD CONSTRAINT fk_class_teacher_id FOREIGN KEY (teacher_id) REFERENCES sys_user(id) ON DELETE SET NULL ON UPDATE CASCADE;

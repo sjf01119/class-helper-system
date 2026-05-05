@@ -1,6 +1,7 @@
 package com.example.classhelper.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.classhelper.dto.UserDTO;
@@ -41,6 +42,11 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class UserManageServiceImpl extends ServiceImpl<UserMapper, User> implements UserManageService {
 
+    private static final String TEACHER_USERNAME_PATTERN = "^[\\u4e00-\\u9fa5A-Za-z0-9_]{2,20}$";
+    private static final String TEACHER_REAL_NAME_PATTERN = "^[\\u4e00-\\u9fa5A-Za-z]{2,20}$";
+    private static final String STUDENT_USERNAME_PATTERN = "^[\\u4e00-\\u9fa5A-Za-z0-9_]{2,20}$";
+    private static final String STUDENT_REAL_NAME_PATTERN = "^[\\u4e00-\\u9fa5A-Za-z]{2,20}$";
+
     private final RoleService roleService;
     private final UserRoleService userRoleService;
     private final UserRoleMapper userRoleMapper;
@@ -78,17 +84,14 @@ public class UserManageServiceImpl extends ServiceImpl<UserMapper, User> impleme
                              .like(User::getRealName, queryDTO.getKeyword()));
         }
         
-        // 按角色筛选
+        // 按角色筛选 - 使用更简单的方式，通过用户角色关联表直接筛选
         if (StringUtils.hasText(queryDTO.getRole())) {
-            // 先查询该角色的用户ID列表
-            List<Long> userIds = baseMapper.selectByRole(queryDTO.getRole())
-                                          .stream()
-                                          .map(User::getId)
-                                          .toList();
-            if (CollectionUtils.isEmpty(userIds)) {
-                return new PageVO<>(List.of(), 0L, 1L, 10L);
-            }
-            wrapper.in(User::getId, userIds);
+            // 直接通过用户角色关联表查询
+            wrapper.inSql(User::getId, 
+                "SELECT user_id FROM sys_user_role ur " +
+                "INNER JOIN sys_role r ON ur.role_id = r.id AND r.is_deleted = 0 " +
+                "WHERE r.role_code = '" + queryDTO.getRole() + "' AND ur.is_deleted = 0"
+            );
         }
         
         // 按班级筛选
@@ -132,6 +135,11 @@ public class UserManageServiceImpl extends ServiceImpl<UserMapper, User> impleme
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean add(UserDTO dto) {
+        validateTeacherUsername(dto.getUsername(), dto.getRoles());
+        validateTeacherRealName(dto.getRealName(), dto.getRoles());
+        validateStudentUsername(dto.getUsername(), dto.getRoles());
+        validateStudentRealName(dto.getRealName(), dto.getRoles());
+
         // 检查用户名是否已存在
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(User::getUsername, dto.getUsername());
@@ -219,7 +227,21 @@ public class UserManageServiceImpl extends ServiceImpl<UserMapper, User> impleme
         if (newIsTeacher) {
             user.setClassId(null);
         }
-        this.updateById(user);
+        user.setUpdatedAt(LocalDateTime.now());
+
+        LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(User::getId, user.getId())
+                .set(User::getUsername, user.getUsername())
+                .set(User::getRealName, user.getRealName())
+                .set(User::getEmail, user.getEmail())
+                .set(User::getPhone, user.getPhone())
+                .set(User::getStatus, user.getStatus())
+                .set(User::getClassId, user.getClassId())
+                .set(User::getUpdatedAt, user.getUpdatedAt());
+        if (StringUtils.hasText(dto.getPassword())) {
+            updateWrapper.set(User::getPassword, user.getPassword());
+        }
+        this.update(null, updateWrapper);
         
         // 更新角色（如果有）
         if (hasNewRoles) {
@@ -261,6 +283,32 @@ public class UserManageServiceImpl extends ServiceImpl<UserMapper, User> impleme
         boolean removed = this.removeById(id);
         if (removed && user.getClassId() != null) {
             clazzService.syncStudentCount(user.getClassId());
+        }
+        return removed;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean removeBatch(List<Long> ids) {
+        if (CollectionUtils.isEmpty(ids)) {
+            throw new BusinessException("请选择要删除的用户");
+        }
+
+        List<User> users = this.listByIds(ids);
+        if (users.size() != ids.size()) {
+            throw new BusinessException("部分用户不存在");
+        }
+
+        boolean removed = this.removeByIds(ids);
+        if (removed) {
+            List<Long> classIds = users.stream()
+                    .map(User::getClassId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+            if (!classIds.isEmpty()) {
+                clazzService.syncStudentCounts(classIds);
+            }
         }
         return removed;
     }
@@ -391,6 +439,42 @@ public class UserManageServiceImpl extends ServiceImpl<UserMapper, User> impleme
                 userRole.setRoleId(role.getId());
                 userRoleService.save(userRole);
             }
+        }
+    }
+
+    private void validateTeacherUsername(String username, List<String> roles) {
+        if (CollectionUtils.isEmpty(roles) || !roles.contains("teacher")) {
+            return;
+        }
+        if (!StringUtils.hasText(username) || !username.matches(TEACHER_USERNAME_PATTERN)) {
+            throw new BusinessException("教师用户名只能包含中文、字母、数字、下划线，长度2-20");
+        }
+    }
+
+    private void validateTeacherRealName(String realName, List<String> roles) {
+        if (CollectionUtils.isEmpty(roles) || !roles.contains("teacher")) {
+            return;
+        }
+        if (!StringUtils.hasText(realName) || !realName.matches(TEACHER_REAL_NAME_PATTERN)) {
+            throw new BusinessException("教师真实姓名只能包含中文、字母，长度2-20");
+        }
+    }
+
+    private void validateStudentUsername(String username, List<String> roles) {
+        if (CollectionUtils.isEmpty(roles) || !roles.contains("student")) {
+            return;
+        }
+        if (!StringUtils.hasText(username) || !username.matches(STUDENT_USERNAME_PATTERN)) {
+            throw new BusinessException("学生用户名只能包含中文、字母、数字、下划线，长度2-20");
+        }
+    }
+
+    private void validateStudentRealName(String realName, List<String> roles) {
+        if (CollectionUtils.isEmpty(roles) || !roles.contains("student")) {
+            return;
+        }
+        if (!StringUtils.hasText(realName) || !realName.matches(STUDENT_REAL_NAME_PATTERN)) {
+            throw new BusinessException("学生真实姓名只能包含中文、字母，长度2-20");
         }
     }
 

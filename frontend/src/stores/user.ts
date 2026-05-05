@@ -21,7 +21,7 @@ interface UserInfo {
   phone?: string
   avatarUrl?: string
   roles: string[]
-  classId?: number
+  classId?: number | null
   className?: string
   isHeadTeacher?: boolean
   status: number

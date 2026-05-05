@@ -166,6 +166,10 @@
                         <el-dropdown-item command="edit">编辑课程</el-dropdown-item>
                         <el-dropdown-item command="homework">管理作业</el-dropdown-item>
                         <el-dropdown-item command="students">查看学生</el-dropdown-item>
+                        <el-dropdown-item command="delete" divided>
+                          <el-icon><Delete /></el-icon>
+                          <span>删除课程</span>
+                        </el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
@@ -350,6 +354,7 @@ import type { UploadRequestOptions } from 'element-plus'
 import {
   ArrowDown,
   Calendar,
+  Delete,
   Picture,
   Plus,
   Reading,
@@ -360,6 +365,7 @@ import {
   addCourse,
   batchDeleteCourses,
   batchUpdateCourseStatus,
+  deleteCourse,
   getMyTeacherCourses,
   type CourseDTO,
   type CourseVO,
@@ -519,6 +525,10 @@ const handleCourseCommand = (command: string, course: CourseVO) => {
   }
   if (command === 'students') {
     openDetail(course, 'students')
+    return
+  }
+  if (command === 'delete') {
+    handleDeleteCourse(course)
   }
 }
 
@@ -562,6 +572,18 @@ const handleBatchDelete = async () => {
   await batchDeleteCourses(selectedIds.value)
   ElMessage.success('批量删除成功')
   clearSelection()
+  await loadCourses()
+}
+
+const handleDeleteCourse = async (course: CourseVO) => {
+  await ElMessageBox.confirm(`确认删除课程“${course.courseName}”吗？删除后将无法恢复，请谨慎操作。`, '删除课程确认', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消'
+  })
+  await deleteCourse(course.id)
+  ElMessage.success('课程删除成功')
+  selectedIds.value = selectedIds.value.filter((item) => item !== course.id)
   await loadCourses()
 }
 

@@ -3,7 +3,6 @@ package com.example.classhelper.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.example.classhelper.dto.ClazzDTO;
 import com.example.classhelper.dto.ClazzQueryDTO;
-import com.example.classhelper.dto.HeadTeacherBindDTO;
 import com.example.classhelper.entity.Clazz;
 import com.example.classhelper.vo.PageVO;
 
@@ -69,12 +68,6 @@ public interface ClazzService extends IService<Clazz> {
      * @return 是否为班主任
      */
     boolean isHeadTeacher(Long teacherId);
-
-    /**
-     * 绑定教师为指定班级班主任
-     * @param dto 绑定信息
-     */
-    void bindHeadTeacher(HeadTeacherBindDTO dto);
 
     /**
      * 获取所有未删除班级

@@ -45,7 +45,7 @@
         <el-table-column prop="realName" label="真实姓名" min-width="120" show-overflow-tooltip />
         <el-table-column prop="phone" label="手机号" min-width="130" />
         <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
-        <el-table-column label="管理班级" width="220">
+        <el-table-column label="授课班级" width="220">
           <template #default="{ row }">
             <el-tooltip :content="row.className" placement="top" :disabled="!row.className">
               <div class="class-names-cell">{{ row.className || '未关联班级' }}</div>
@@ -76,11 +76,8 @@
             {{ formatTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right" align="center">
+        <el-table-column label="操作" width="170" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button link type="warning" @click="handleSetHeadTeacher(row)">
-              设为班主任
-            </el-button>
             <el-button link type="primary" @click="handleEdit(row)">
               <el-icon><Edit /></el-icon>编辑
             </el-button>
@@ -135,7 +132,7 @@
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="formData.email" placeholder="请输入邮箱" maxlength="50" />
         </el-form-item>
-        <el-form-item label="管理班级">
+        <el-form-item label="授课班级">
           <el-select
             v-model="formData.classIds"
             multiple
@@ -143,7 +140,7 @@
             clearable
             collapse-tags
             collapse-tags-tooltip
-            placeholder="请选择管理班级"
+            placeholder="请选择授课班级"
             style="width: 100%"
           >
             <el-option v-for="cls in classList" :key="cls.id" :label="cls.className" :value="cls.id" />
@@ -162,41 +159,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog
-      title="设置班主任"
-      v-model="headTeacherDialogVisible"
-      width="480px"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <el-form :model="headTeacherForm" label-width="96px">
-        <el-form-item label="教师姓名">
-          <el-input :model-value="headTeacherTarget?.realName || '-'" disabled />
-        </el-form-item>
-        <el-form-item label="选择班级" required>
-          <el-select
-            v-model="headTeacherForm.classId"
-            placeholder="请选择班级"
-            filterable
-            style="width: 100%"
-          >
-            <el-option
-              v-for="cls in classList"
-              :key="cls.id"
-              :label="getHeadTeacherOptionLabel(cls)"
-              :value="cls.id"
-              :disabled="Boolean(cls.teacherId && cls.teacherId !== headTeacherForm.teacherId)"
-            />
-          </el-select>
-          <span class="form-tip">已绑定其他教师的班级不可重复设置为班主任班级</span>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="headTeacherDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="headTeacherSubmitting" @click="handleBindHeadTeacher">确定绑定</el-button>
-      </template>
-    </el-dialog>
-
   </div>
 </template>
 
@@ -205,7 +167,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, RefreshRight, Plus, Edit, Delete } from '@element-plus/icons-vue'
 import { getUserList, addUser, updateUser, deleteUser, type UserVO, type UserDTO } from '@/api/user'
-import { getAllClasses, bindHeadTeacher, type ClassVO } from '@/api/class'
+import { getAllClasses, type ClassVO } from '@/api/class'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -225,9 +187,6 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const dialogTitle = computed(() => isEdit.value ? '编辑教师' : '新增教师')
 const formRef = ref()
-const headTeacherDialogVisible = ref(false)
-const headTeacherSubmitting = ref(false)
-const headTeacherTarget = ref<UserVO>()
 
 const formData = reactive<UserDTO>({
   username: '',
@@ -238,11 +197,6 @@ const formData = reactive<UserDTO>({
   roles: ['teacher'],
   classIds: [],
   status: 1
-})
-
-const headTeacherForm = reactive({
-  teacherId: undefined as number | undefined,
-  classId: undefined as number | undefined
 })
 
 const validateOptionalPhone = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
@@ -272,11 +226,11 @@ const validateOptionalPassword = (_rule: unknown, value: string, callback: (erro
 const formRules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { pattern: /^[a-zA-Z0-9_]{3,20}$/, message: '用户名只能包含字母、数字、下划线，长度3-20', trigger: 'blur' }
+    { pattern: /^[\u4e00-\u9fa5a-zA-Z0-9_]{2,20}$/, message: '用户名只能包含中文、字母、数字、下划线，长度2-20', trigger: 'blur' }
   ],
   realName: [
     { required: true, message: '请输入真实姓名', trigger: 'blur' },
-    { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
+    { pattern: /^[\u4e00-\u9fa5a-zA-Z]{2,20}$/, message: '真实姓名只能包含中文、字母，长度2-20', trigger: 'blur' }
   ],
   phone: [
     { validator: validateOptionalPhone, trigger: 'blur' }
@@ -300,13 +254,6 @@ const buildSubmitPayload = (): UserDTO => ({
 const formatTime = (time?: string) => {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN')
-}
-
-const getHeadTeacherOptionLabel = (cls: ClassVO) => {
-  if (cls.teacherId && cls.teacherId !== headTeacherForm.teacherId) {
-    return `${cls.className}（已绑定：${cls.headTeacherName || '其他教师'}）`
-  }
-  return cls.className
 }
 
 const loadTeacherList = async () => {
@@ -368,13 +315,6 @@ const handleEdit = (row: UserVO) => {
   dialogVisible.value = true
 }
 
-const handleSetHeadTeacher = (row: UserVO) => {
-  headTeacherTarget.value = row
-  headTeacherForm.teacherId = row.id
-  headTeacherForm.classId = row.headTeacherClassId
-  headTeacherDialogVisible.value = true
-}
-
 const handleSubmit = async () => {
   await formRef.value.validate()
   submitLoading.value = true
@@ -393,32 +333,6 @@ const handleSubmit = async () => {
     console.error('保存失败', error)
   } finally {
     submitLoading.value = false
-  }
-}
-
-const handleBindHeadTeacher = async () => {
-  if (!headTeacherForm.teacherId) {
-    ElMessage.warning('未选择教师')
-    return
-  }
-  if (!headTeacherForm.classId) {
-    ElMessage.warning('请选择班级')
-    return
-  }
-
-  headTeacherSubmitting.value = true
-  try {
-    await bindHeadTeacher({
-      teacherId: headTeacherForm.teacherId,
-      classId: headTeacherForm.classId
-    })
-    ElMessage.success('班主任绑定成功')
-    headTeacherDialogVisible.value = false
-    await Promise.all([loadTeacherList(), loadClassOptions()])
-  } catch (error) {
-    console.error('班主任绑定失败', error)
-  } finally {
-    headTeacherSubmitting.value = false
   }
 }
 

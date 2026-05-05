@@ -62,7 +62,9 @@ export const deleteAnnouncement = (id: number) => {
 
 // 批量删除公告
 export const deleteAnnouncementBatch = (ids: number[]) => {
-  return request.delete('/announcement/batch', { params: { ids } })
+  const params = new URLSearchParams()
+  ids.forEach((id) => params.append('ids', String(id)))
+  return request.delete(`/announcement/batch?${params.toString()}`)
 }
 
 // 获取班级公告列表

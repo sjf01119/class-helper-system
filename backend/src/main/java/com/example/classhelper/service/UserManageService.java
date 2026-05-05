@@ -52,6 +52,13 @@ public interface UserManageService extends IService<User> {
     boolean remove(Long id);
 
     /**
+     * 批量删除用户
+     * @param ids 用户ID列表
+     * @return 是否成功
+     */
+    boolean removeBatch(List<Long> ids);
+
+    /**
      * 获取用户详情
      * @param id 用户ID
      * @param currentUserId 当前用户ID

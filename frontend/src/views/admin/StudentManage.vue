@@ -35,6 +35,9 @@
           <el-button type="warning" @click="handleBatchAssign">
             <el-icon><User /></el-icon>批量分班
           </el-button>
+          <el-button type="danger" @click="handleBatchDelete">
+            <el-icon><Delete /></el-icon>批量删除
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -133,7 +136,7 @@
         </el-form-item>
         <el-form-item label="分配班级" prop="classId">
           <el-select v-model="formData.classId" clearable placeholder="请选择班级" style="width: 100%">
-            <el-option label="暂不分配" :value="undefined" />
+            <el-option label="暂不分配" :value="null" />
             <el-option v-for="cls in classList" :key="cls.id" :label="cls.className" :value="cls.id" />
           </el-select>
         </el-form-item>
@@ -159,7 +162,7 @@
         </el-form-item>
         <el-form-item label="分配班级">
           <el-select v-model="assignForm.classId" clearable placeholder="请选择班级" style="width: 100%">
-            <el-option label="取消分配" :value="undefined" />
+            <el-option label="取消分配" :value="null" />
             <el-option v-for="cls in classList" :key="cls.id" :label="cls.className" :value="cls.id" />
           </el-select>
         </el-form-item>
@@ -176,7 +179,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, RefreshRight, Plus, Edit, Delete, OfficeBuilding, User } from '@element-plus/icons-vue'
-import { getUserList, addUser, updateUser, deleteUser, type UserVO, type UserDTO } from '@/api/user'
+import { getUserList, addUser, updateUser, deleteUser, deleteUserBatch, type UserVO, type UserDTO } from '@/api/user'
 import { getAllClasses, type ClassVO } from '@/api/class'
 
 const loading = ref(false)
@@ -210,13 +213,13 @@ const formData = reactive<UserDTO>({
   realName: '',
   phone: '',
   roles: ['student'],
-  classId: undefined,
+  classId: null,
   status: 1
 })
 
 const assignForm = reactive({
   ids: [] as number[],
-  classId: undefined as number | undefined
+  classId: null as number | null
 })
 
 const validateOptionalPhone = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
@@ -246,11 +249,11 @@ const validateOptionalPassword = (_rule: unknown, value: string, callback: (erro
 const formRules = {
   username: [
     { required: true, message: '请输入学号', trigger: 'blur' },
-    { pattern: /^[a-zA-Z0-9_]{3,20}$/, message: '学号只能包含字母、数字、下划线，长度3-20', trigger: 'blur' }
+    { pattern: /^[\u4e00-\u9fa5a-zA-Z0-9_]{2,20}$/, message: '用户名只能包含中文、字母、数字、下划线，长度2-20', trigger: 'blur' }
   ],
   realName: [
     { required: true, message: '请输入姓名', trigger: 'blur' },
-    { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
+    { pattern: /^[\u4e00-\u9fa5a-zA-Z]{2,20}$/, message: '真实姓名只能包含中文、字母，长度2-20', trigger: 'blur' }
   ],
   phone: [
     { validator: validateOptionalPhone, trigger: 'blur' }
@@ -263,7 +266,8 @@ const formRules = {
 const buildSubmitPayload = (): UserDTO => ({
   ...formData,
   password: formData.password?.trim() || undefined,
-  phone: formData.phone?.trim() || undefined
+  phone: formData.phone?.trim() || undefined,
+  classId: formData.classId ?? null
 })
 
 const formatTime = (time?: string) => {
@@ -313,7 +317,7 @@ const handleAdd = () => {
     realName: '',
     phone: '',
     roles: ['student'],
-    classId: undefined,
+    classId: null,
     status: 1
   })
   dialogVisible.value = true
@@ -328,7 +332,7 @@ const handleEdit = (row: UserVO) => {
     realName: row.realName,
     phone: row.phone || '',
     roles: row.roles || ['student'],
-    classId: row.classId,
+    classId: row.classId ?? null,
     status: row.status
   })
   dialogVisible.value = true
@@ -359,7 +363,7 @@ const handleAssignClass = (row: UserVO) => {
   isBatchAssign.value = false
   currentStudent.value = row
   assignForm.ids = [row.id!]
-  assignForm.classId = row.classId
+  assignForm.classId = row.classId ?? null
   assignDialogVisible.value = true
 }
 
@@ -370,7 +374,7 @@ const handleBatchAssign = () => {
   }
   isBatchAssign.value = true
   assignForm.ids = selectedStudents.value.map(s => s.id!)
-  assignForm.classId = undefined
+  assignForm.classId = null
   assignDialogVisible.value = true
 }
 
@@ -440,6 +444,23 @@ const handleDelete = (row: UserVO) => {
     await deleteUser(row.id)
     ElMessage.error('删除成功')
     loadStudentList()
+  }).catch(() => {})
+}
+
+const handleBatchDelete = () => {
+  if (selectedStudents.value.length === 0) {
+    ElMessage.warning('请先选择要删除的学生')
+    return
+  }
+
+  ElMessageBox.confirm(`确定批量删除已选中的 ${selectedStudents.value.length} 名学生吗？`, '提示', {
+    type: 'warning'
+  }).then(async () => {
+    await deleteUserBatch(selectedStudents.value.map(student => student.id))
+    ElMessage.success('批量删除成功')
+    selectedStudents.value = []
+    loadStudentList()
+    loadClassList()
   }).catch(() => {})
 }
 

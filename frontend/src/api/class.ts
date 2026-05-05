@@ -14,8 +14,10 @@ export interface ClassDTO {
   className: string
   description?: string
   inviteCode?: string
-  teacherId?: number
+  teacherId?: number | null
   status?: number
+  forceReplaceHeadTeacher?: boolean
+  confirmClearHeadTeacher?: boolean
 }
 
 // 班级 VO
@@ -24,17 +26,12 @@ export interface ClassVO {
   className: string
   description?: string
   inviteCode?: string
-  teacherId?: number
+  teacherId?: number | null
   headTeacherName?: string
   teacherNames?: string
   status: number
   currentCount?: number
   createdAt?: string
-}
-
-export interface HeadTeacherBindDTO {
-  teacherId: number
-  classId: number
 }
 
 // 分页结果
@@ -83,10 +80,6 @@ export const getMyHeadTeacherClasses = () => {
 
 export const getHeadTeacherStatus = () => {
   return request.get<boolean>('/class/head-teacher/status')
-}
-
-export const bindHeadTeacher = (data: HeadTeacherBindDTO) => {
-  return request.put('/class/head-teacher/bind', data)
 }
 
 // 获取学生所在班级

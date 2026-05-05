@@ -40,6 +40,16 @@ public class ClazzDTO {
     private Long teacherId;
 
     /**
+     * 是否确认替换原班主任
+     */
+    private Boolean forceReplaceHeadTeacher;
+
+    /**
+     * 是否确认取消班主任
+     */
+    private Boolean confirmClearHeadTeacher;
+
+    /**
      * 状态：0-禁用，1-启用
      */
     private Integer status;

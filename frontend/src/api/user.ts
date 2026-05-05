@@ -19,7 +19,7 @@ export interface UserDTO {
   email?: string
   phone?: string
   roles: string[]
-  classId?: number
+  classId?: number | null
   classIds?: number[]
   status?: number
 }
@@ -35,7 +35,7 @@ export interface UserVO {
   avatarUrl?: string
   gender?: number
   roles: string[]
-  classId?: number
+  classId?: number | null
   className?: string
   classIds?: number[]
   isHeadTeacher?: boolean
@@ -72,6 +72,12 @@ export const updateUser = (data: UserDTO) => {
 // 删除用户
 export const deleteUser = (id: number) => {
   return request.delete(`/user/${id}`)
+}
+
+export const deleteUserBatch = (ids: number[]) => {
+  const params = new URLSearchParams()
+  ids.forEach((id) => params.append('ids', String(id)))
+  return request.delete(`/user/batch?${params.toString()}`)
 }
 
 // 获取用户详情

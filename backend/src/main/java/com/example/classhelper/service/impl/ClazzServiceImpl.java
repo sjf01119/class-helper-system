@@ -1,25 +1,21 @@
 package com.example.classhelper.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.classhelper.dto.ClazzDTO;
 import com.example.classhelper.dto.ClazzQueryDTO;
-import com.example.classhelper.dto.HeadTeacherBindDTO;
 import com.example.classhelper.entity.Clazz;
 import com.example.classhelper.entity.Course;
-import com.example.classhelper.entity.Role;
 import com.example.classhelper.entity.TeacherClass;
 import com.example.classhelper.entity.User;
-import com.example.classhelper.entity.UserRole;
 import com.example.classhelper.exception.BusinessException;
 import com.example.classhelper.mapper.ClazzMapper;
 import com.example.classhelper.mapper.TeacherClassMapper;
 import com.example.classhelper.service.ClazzService;
 import com.example.classhelper.service.CourseService;
-import com.example.classhelper.service.RoleService;
 import com.example.classhelper.service.UserService;
-import com.example.classhelper.service.UserRoleService;
 import com.example.classhelper.vo.PageVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,8 +43,6 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
     private final UserService userService;
     private final TeacherClassMapper teacherClassMapper;
     private final CourseService courseService;
-    private final RoleService roleService;
-    private final UserRoleService userRoleService;
 
     @Override
     public PageVO<Clazz> pageList(ClazzQueryDTO queryDTO) {
@@ -80,10 +74,9 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean add(ClazzDTO dto) {
-        if (dto.getTeacherId() == null) {
-            throw new BusinessException("请选择班主任");
-        }
+        validateHeadTeacherAvailability(dto.getTeacherId(), null);
 
         // 检查班级名称是否已存在
         LambdaQueryWrapper<Clazz> wrapper = new LambdaQueryWrapper<>();
@@ -106,10 +99,15 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
             clazz.setStatus(1);
         }
 
-        return this.save(clazz);
+        boolean saved = this.save(clazz);
+        if (saved) {
+            ensureTeacherClassRelation(clazz.getTeacherId(), clazz.getId());
+        }
+        return saved;
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean update(ClazzDTO dto) {
         if (dto.getId() == null) {
             throw new BusinessException("班级ID不能为空");
@@ -131,12 +129,37 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
 
         clazz.setClassName(dto.getClassName());
         clazz.setDescription(StringUtils.hasText(dto.getDescription()) ? dto.getDescription().trim() : null);
-        if (dto.getTeacherId() != null) {
-            clazz.setTeacherId(dto.getTeacherId());
+        Long currentTeacherId = clazz.getTeacherId();
+        Long nextTeacherId = dto.getTeacherId();
+        boolean replacingHeadTeacher = currentTeacherId != null
+                && nextTeacherId != null
+                && !Objects.equals(currentTeacherId, nextTeacherId);
+        boolean clearingHeadTeacher = currentTeacherId != null && nextTeacherId == null;
+
+        if (replacingHeadTeacher && !Boolean.TRUE.equals(dto.getForceReplaceHeadTeacher())) {
+            throw new BusinessException("该班级当前已有班主任【" + getHeadTeacherName(currentTeacherId) + "】，更换后原班主任将失去权限，确定要更换吗？");
         }
+        if (clearingHeadTeacher && !Boolean.TRUE.equals(dto.getConfirmClearHeadTeacher())) {
+            throw new BusinessException("确定要取消该班级的班主任吗？取消后该班级将无班主任管理。");
+        }
+        validateHeadTeacherAvailability(nextTeacherId, clazz.getId());
+
+        clazz.setTeacherId(nextTeacherId);
         clazz.setStatus(dto.getStatus());
         clazz.setUpdatedAt(LocalDateTime.now());
-        return this.updateById(clazz);
+
+        LambdaUpdateWrapper<Clazz> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(Clazz::getId, clazz.getId())
+                .set(Clazz::getClassName, clazz.getClassName())
+                .set(Clazz::getDescription, clazz.getDescription())
+                .set(Clazz::getTeacherId, clazz.getTeacherId())
+                .set(Clazz::getStatus, clazz.getStatus())
+                .set(Clazz::getUpdatedAt, clazz.getUpdatedAt());
+        boolean updated = this.update(null, updateWrapper);
+        if (updated) {
+            ensureTeacherClassRelation(clazz.getTeacherId(), clazz.getId());
+        }
+        return updated;
     }
 
     @Override
@@ -208,39 +231,6 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
                 .eq(Clazz::getTeacherId, teacherId)
                 .eq(Clazz::getIsDeleted, 0)
                 .count() > 0;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void bindHeadTeacher(HeadTeacherBindDTO dto) {
-        if (dto == null || dto.getTeacherId() == null || dto.getClassId() == null) {
-            throw new BusinessException("绑定信息不完整");
-        }
-
-        User teacher = userService.getById(dto.getTeacherId());
-        if (teacher == null || Integer.valueOf(1).equals(teacher.getIsDeleted())) {
-            throw new BusinessException("教师不存在");
-        }
-        if (!isTeacherUser(dto.getTeacherId())) {
-            throw new BusinessException("所选用户不是教师");
-        }
-
-        Clazz clazz = this.getById(dto.getClassId());
-        if (clazz == null || Integer.valueOf(1).equals(clazz.getIsDeleted())) {
-            throw new BusinessException("班级不存在");
-        }
-
-        if (clazz.getTeacherId() != null && !Objects.equals(clazz.getTeacherId(), dto.getTeacherId())) {
-            throw new BusinessException("该班级已绑定其他班主任，请先在班级管理中调整");
-        }
-
-        if (!Objects.equals(clazz.getTeacherId(), dto.getTeacherId())) {
-            clazz.setTeacherId(dto.getTeacherId());
-            clazz.setUpdatedAt(LocalDateTime.now());
-            this.updateById(clazz);
-        }
-
-        ensureTeacherClassRelation(dto.getTeacherId(), dto.getClassId());
     }
 
     @Override
@@ -370,16 +360,35 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
         return Math.toIntExact(studentCount);
     }
 
-    private boolean isTeacherUser(Long userId) {
-        Role teacherRole = roleService.getByCode("teacher");
-        if (teacherRole == null || userId == null) {
-            return false;
+    private String getHeadTeacherName(Long teacherId) {
+        if (teacherId == null) {
+            return "未设置";
         }
-        return userRoleService.lambdaQuery()
-                .eq(UserRole::getUserId, userId)
-                .eq(UserRole::getRoleId, teacherRole.getId())
-                .eq(UserRole::getIsDeleted, 0)
-                .count() > 0;
+        User teacher = userService.getById(teacherId);
+        if (teacher == null) {
+            return "未知教师";
+        }
+        if (StringUtils.hasText(teacher.getRealName())) {
+            return teacher.getRealName();
+        }
+        return teacher.getUsername();
+    }
+
+    private void validateHeadTeacherAvailability(Long teacherId, Long currentClassId) {
+        if (teacherId == null) {
+            return;
+        }
+        LambdaQueryWrapper<Clazz> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Clazz::getTeacherId, teacherId)
+                .eq(Clazz::getIsDeleted, 0);
+        if (currentClassId != null) {
+            wrapper.ne(Clazz::getId, currentClassId);
+        }
+
+        Clazz occupiedClazz = this.getOne(wrapper, false);
+        if (occupiedClazz != null) {
+            throw new BusinessException("教师【" + getHeadTeacherName(teacherId) + "】已担任班级【" + occupiedClazz.getClassName() + "】的班主任，不能重复设置");
+        }
     }
 
     private void ensureTeacherClassRelation(Long teacherId, Long classId) {

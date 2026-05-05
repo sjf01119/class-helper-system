@@ -87,6 +87,13 @@ public class UserController {
         return success ? R.ok("删除成功", null) : R.error("删除失败");
     }
 
+    @DeleteMapping("/batch")
+    @RequiresRole("admin")
+    public R<Void> deleteBatch(@RequestParam List<Long> ids) {
+        boolean success = userManageService.removeBatch(ids);
+        return success ? R.ok("批量删除成功", null) : R.error("批量删除失败");
+    }
+
     /**
      * 获取用户详情
      */

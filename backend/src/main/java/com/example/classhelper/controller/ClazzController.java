@@ -4,7 +4,6 @@ import com.example.classhelper.annotation.RequiresRole;
 import com.example.classhelper.common.R;
 import com.example.classhelper.dto.ClazzDTO;
 import com.example.classhelper.dto.ClazzQueryDTO;
-import com.example.classhelper.dto.HeadTeacherBindDTO;
 import com.example.classhelper.entity.Clazz;
 import com.example.classhelper.entity.User;
 import com.example.classhelper.exception.BusinessException;
@@ -109,16 +108,6 @@ public class ClazzController {
     public R<Boolean> getHeadTeacherStatus() {
         Long teacherId = SecurityUtil.getCurrentUserId();
         return R.ok(clazzService.isHeadTeacher(teacherId));
-    }
-
-    /**
-     * 管理员为教师绑定班主任班级
-     */
-    @PutMapping("/head-teacher/bind")
-    @RequiresRole("admin")
-    public R<Void> bindHeadTeacher(@Valid @RequestBody HeadTeacherBindDTO dto) {
-        clazzService.bindHeadTeacher(dto);
-        return R.ok("班主任绑定成功", null);
     }
 
     /**

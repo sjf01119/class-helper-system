@@ -84,8 +84,11 @@
             {{ formatTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right" align="center">
+        <el-table-column label="操作" width="280" fixed="right" align="center">
           <template #default="{ row }">
+            <el-button link type="primary" @click="handleViewStudents(row)">
+              <el-icon><View /></el-icon>查看学生
+            </el-button>
             <el-button link type="primary" @click="handleEdit(row)">
               <el-icon><Edit /></el-icon>编辑
             </el-button>
@@ -138,15 +141,16 @@
           <el-select
             v-model="formData.teacherId"
             filterable
-            clearable
             placeholder="请选择班主任教师"
             style="width: 100%"
           >
+            <el-option label="无 / 取消班主任" :value="null" />
             <el-option
               v-for="teacher in teacherOptions"
               :key="teacher.id"
-              :label="`${teacher.realName}（${teacher.username}）`"
+              :label="getTeacherOptionLabel(teacher)"
               :value="teacher.id"
+              :disabled="isTeacherOptionDisabled(teacher)"
             />
           </el-select>
         </el-form-item>
@@ -172,21 +176,106 @@
         <el-button type="primary" @click="handleSubmit" :loading="submitLoading">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="studentDialogVisible"
+      width="920px"
+      :close-on-click-modal="false"
+      destroy-on-close
+      @closed="handleStudentDialogClosed"
+    >
+      <template #header>
+        <div class="student-dialog-toolbar">
+          <div class="student-dialog-header">
+            <div class="student-dialog-title">查看学生</div>
+            <div class="student-dialog-subtitle">
+              当前班级：{{ currentViewingClass?.className || '-' }}
+            </div>
+          </div>
+          <el-button
+            type="primary"
+            :disabled="!studentList.length"
+            @click="handleExportStudents"
+          >
+            <el-icon><Download /></el-icon>导出 Excel
+          </el-button>
+        </div>
+      </template>
+
+      <el-table
+        :data="studentList"
+        v-loading="studentLoading"
+        border
+        stripe
+        highlight-current-row
+        empty-text="当前班级暂无学生"
+      >
+        <el-table-column
+          type="index"
+          label="序号"
+          width="70"
+          align="center"
+          :index="getStudentIndex"
+        />
+        <el-table-column prop="username" label="用户名" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="username" label="学号 / 账号" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="realName" label="学生姓名" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="className" label="所在班级" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-tag type="primary" effect="light">
+              {{ row.className || currentViewingClass?.className || '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="加入时间" width="180" align="center">
+          <template #default="{ row }">
+            {{ formatDisplayTime(row.createdAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="light">
+              {{ row.status === 1 ? '已激活' : '未激活' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination-wrapper student-pagination">
+        <el-pagination
+          :current-page="studentQueryParams.current"
+          :page-size="studentQueryParams.size"
+          :total="studentTotal"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleStudentSizeChange"
+          @current-change="handleStudentCurrentChange"
+        />
+      </div>
+
+      <template #footer>
+        <el-button @click="studentDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, RefreshRight, Plus, Edit, Delete, Refresh, CopyDocument } from '@element-plus/icons-vue'
+import { Search, RefreshRight, Plus, Edit, Delete, Refresh, CopyDocument, View, Download } from '@element-plus/icons-vue'
+import * as XLSX from 'xlsx'
 import { getClassList, addClass, updateClass, deleteClass, resetInviteCode, type ClassVO, type ClassDTO } from '@/api/class'
 import { getUserList, type UserVO } from '@/api/user'
 
 const loading = ref(false)
 const submitLoading = ref(false)
+const studentLoading = ref(false)
 const classList = ref<ClassVO[]>([])
 const teacherOptions = ref<UserVO[]>([])
+const studentList = ref<UserVO[]>([])
 const total = ref(0)
+const studentTotal = ref(0)
 
 const queryParams = reactive({
   current: 1,
@@ -195,17 +284,27 @@ const queryParams = reactive({
   status: undefined as number | undefined
 })
 
+const studentQueryParams = reactive({
+  current: 1,
+  size: 10,
+  role: 'student',
+  classId: undefined as number | undefined
+})
+
 const dialogVisible = ref(false)
+const studentDialogVisible = ref(false)
 const isEdit = ref(false)
 const dialogTitle = computed(() => isEdit.value ? '编辑班级' : '创建班级')
 const formRef = ref()
+const currentViewingClass = ref<ClassVO>()
+const editingClassSnapshot = ref<ClassVO>()
 
 const formData = reactive<ClassDTO>({
   id: undefined,
   className: '',
   description: '',
   inviteCode: '',
-  teacherId: undefined,
+  teacherId: null,
   status: 1
 })
 
@@ -213,9 +312,6 @@ const formRules = {
   className: [
     { required: true, message: '请输入班级名称', trigger: 'blur' },
     { min: 2, max: 50, message: '长度在 2 到 50 个字符', trigger: 'blur' }
-  ],
-  teacherId: [
-    { required: true, message: '请选择班主任', trigger: 'change' }
   ],
   description: [
     { max: 500, message: '班级描述长度不能超过 500 个字符', trigger: 'blur' }
@@ -234,6 +330,31 @@ const formatTime = (time?: string) => {
     return formatDate(new Date())
   }
   return formatDate(date)
+}
+
+const formatDisplayTime = (time?: string) => {
+  if (!time) {
+    return '-'
+  }
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) {
+    return '-'
+  }
+  return formatDate(date)
+}
+
+const getTeacherOptionLabel = (teacher: UserVO) => {
+  if (teacher.headTeacherClassId && teacher.headTeacherClassName) {
+    return `${teacher.realName}（${teacher.username}，已任 ${teacher.headTeacherClassName} 班主任）`
+  }
+  return `${teacher.realName}（${teacher.username}）`
+}
+
+const isTeacherOptionDisabled = (teacher: UserVO) => {
+  if (!teacher.headTeacherClassId) {
+    return false
+  }
+  return teacher.headTeacherClassId !== editingClassSnapshot.value?.id
 }
 
 const loadClassList = async () => {
@@ -257,6 +378,25 @@ const loadTeacherOptions = async () => {
   teacherOptions.value = res.records || []
 }
 
+const loadStudentList = async () => {
+  if (!studentQueryParams.classId) {
+    studentList.value = []
+    studentTotal.value = 0
+    return
+  }
+  studentLoading.value = true
+  try {
+    const res = await getUserList(studentQueryParams)
+    studentList.value = (res.records || []).map((item) => ({
+      ...item,
+      className: item.className || currentViewingClass.value?.className
+    }))
+    studentTotal.value = res.total || 0
+  } finally {
+    studentLoading.value = false
+  }
+}
+
 const handleSearch = () => {
   queryParams.current = 1
   loadClassList()
@@ -271,43 +411,104 @@ const handleReset = () => {
 
 const handleAdd = () => {
   isEdit.value = false
+  editingClassSnapshot.value = undefined
   Object.assign(formData, {
     id: undefined,
     className: '',
     description: '',
     inviteCode: '',
-    teacherId: undefined,
+    teacherId: null,
     status: 1
   })
+  loadTeacherOptions()
   dialogVisible.value = true
 }
 
 const handleEdit = (row: ClassVO) => {
   isEdit.value = true
+  editingClassSnapshot.value = { ...row }
   Object.assign(formData, {
     id: row.id,
     className: row.className,
     description: row.description || '',
     inviteCode: row.inviteCode,
-    teacherId: row.teacherId,
+    teacherId: row.teacherId ?? null,
     status: row.status
   })
+  loadTeacherOptions()
   dialogVisible.value = true
+}
+
+const handleViewStudents = (row: ClassVO) => {
+  currentViewingClass.value = row
+  studentQueryParams.current = 1
+  studentQueryParams.classId = row.id
+  studentDialogVisible.value = true
+  loadStudentList()
 }
 
 const handleSubmit = async () => {
   await formRef.value.validate()
+  const payload: ClassDTO = {
+    ...formData,
+    teacherId: formData.teacherId ?? null
+  }
+
+  const currentHeadTeacherName = editingClassSnapshot.value?.headTeacherName || '未设置'
+  const isReplacingHeadTeacher = isEdit.value
+    && editingClassSnapshot.value?.teacherId != null
+    && payload.teacherId != null
+    && editingClassSnapshot.value.teacherId !== payload.teacherId
+  const isClearingHeadTeacher = isEdit.value
+    && editingClassSnapshot.value?.teacherId != null
+    && payload.teacherId == null
+
+  if (isReplacingHeadTeacher) {
+    try {
+      await ElMessageBox.confirm(
+        `该班级当前已有班主任【${currentHeadTeacherName}】，更换后原班主任将失去权限，确定要更换吗？`,
+        '提示',
+        {
+          type: 'warning',
+          confirmButtonText: '确认更换',
+          cancelButtonText: '取消'
+        }
+      )
+      payload.forceReplaceHeadTeacher = true
+    } catch {
+      return
+    }
+  }
+
+  if (isClearingHeadTeacher) {
+    try {
+      await ElMessageBox.confirm(
+        '确定要取消该班级的班主任吗？取消后该班级将无班主任管理。',
+        '提示',
+        {
+          type: 'warning',
+          confirmButtonText: '确定取消',
+          cancelButtonText: '返回'
+        }
+      )
+      payload.confirmClearHeadTeacher = true
+    } catch {
+      return
+    }
+  }
+
   submitLoading.value = true
   try {
     if (isEdit.value) {
-      await updateClass(formData)
+      await updateClass(payload)
       ElMessage.success('更新成功')
     } else {
-      await addClass(formData)
+      await addClass(payload)
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
-    loadClassList()
+    editingClassSnapshot.value = undefined
+    await Promise.all([loadClassList(), loadTeacherOptions()])
   } catch (error) {
     console.error('保存失败', error)
   } finally {
@@ -384,6 +585,72 @@ const handleDelete = (row: ClassVO) => {
   }).catch(() => {})
 }
 
+const handleExportStudents = async () => {
+  if (!currentViewingClass.value?.id) {
+    ElMessage.warning('未获取到班级信息')
+    return
+  }
+
+  try {
+    const exportRows: UserVO[] = []
+    const pageSize = 100
+    let current = 1
+    let totalCount = 0
+
+    do {
+      const res = await getUserList({
+        current,
+        size: pageSize,
+        role: 'student',
+        classId: currentViewingClass.value.id
+      })
+
+      const records = (res.records || []).map((item) => ({
+        ...item,
+        className: item.className || currentViewingClass.value?.className
+      }))
+
+      exportRows.push(...records)
+      totalCount = res.total || 0
+      current += 1
+    } while (exportRows.length < totalCount)
+
+    if (!exportRows.length) {
+      ElMessage.warning('当前班级暂无学生可导出')
+      return
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(
+      exportRows.map((item, index) => ({
+        序号: index + 1,
+        用户名: item.username || '-',
+        '学号/账号': item.username || '-',
+        学生姓名: item.realName || '-',
+        所在班级: item.className || currentViewingClass.value?.className || '-',
+        加入时间: formatDisplayTime(item.createdAt),
+        状态: item.status === 1 ? '已激活' : '未激活'
+      }))
+    )
+
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, '学生列表')
+    XLSX.writeFile(workbook, `${currentViewingClass.value.className}学生列表.xlsx`)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    console.error('导出学生列表失败', error)
+    ElMessage.error('导出失败')
+  }
+}
+
+const handleStudentDialogClosed = () => {
+  studentList.value = []
+  studentTotal.value = 0
+  studentQueryParams.current = 1
+  studentQueryParams.size = 10
+  studentQueryParams.classId = undefined
+  currentViewingClass.value = undefined
+}
+
 const handleSizeChange = (val: number) => {
   queryParams.size = val
   loadClassList()
@@ -392,6 +659,21 @@ const handleSizeChange = (val: number) => {
 const handleCurrentChange = (val: number) => {
   queryParams.current = val
   loadClassList()
+}
+
+const handleStudentSizeChange = (val: number) => {
+  studentQueryParams.size = val
+  studentQueryParams.current = 1
+  loadStudentList()
+}
+
+const handleStudentCurrentChange = (val: number) => {
+  studentQueryParams.current = val
+  loadStudentList()
+}
+
+const getStudentIndex = (index: number) => {
+  return (studentQueryParams.current - 1) * studentQueryParams.size + index + 1
 }
 
 onMounted(() => {
@@ -436,6 +718,35 @@ onMounted(() => {
 
 .invite-code-input {
   width: 100%;
+}
+
+.student-dialog-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.student-dialog-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 24px;
+}
+
+.student-dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.student-dialog-subtitle {
+  font-size: 13px;
+  color: #909399;
+}
+
+.student-pagination {
+  margin-top: 16px;
 }
 
 :deep(.el-table) {

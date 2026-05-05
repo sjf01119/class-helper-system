@@ -48,13 +48,14 @@ ALTER TABLE sys_user
 -- 初始化测试数据
 
 -- 插入测试班级
-INSERT INTO sys_class (id, class_name, description, invite_code, status, is_deleted) VALUES
-(1, '软件工程1班', '软件工程专业2024级1班', 'SE202401', 1, 0),
-(2, '计算机科学2班', '计算机科学与技术专业2024级2班', 'CS202402', 1, 0),
-(3, '网络工程3班', '网络工程专业2024级3班', 'NE202403', 1, 0)
+INSERT INTO sys_class (id, class_name, description, invite_code, teacher_id, status, is_deleted) VALUES
+(1, '软件工程1班', '软件工程专业2024级1班', 'SE202401', 2, 1, 0),
+(2, '计算机科学2班', '计算机科学与技术专业2024级2班', 'CS202402', 2, 1, 0),
+(3, '网络工程3班', '网络工程专业2024级3班', 'NE202403', 3, 1, 0)
 ON DUPLICATE KEY UPDATE 
     class_name = VALUES(class_name),
-    description = VALUES(description);
+    description = VALUES(description),
+    teacher_id = VALUES(teacher_id);
 
 -- 插入测试课程
 INSERT INTO sys_course (id, course_name, teacher_id, class_id, description, status, is_deleted) VALUES
