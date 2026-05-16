@@ -15,4 +15,10 @@ public interface ClazzMapper extends BaseMapper<Clazz> {
     @Select("SELECT * FROM sys_class WHERE invite_code = #{inviteCode} AND is_deleted = 0")
     Clazz selectByInviteCode(@Param("inviteCode") String inviteCode);
 
+    @Select("SELECT * FROM sys_class WHERE invite_code = #{inviteCode} AND is_deleted = 0 FOR UPDATE")
+    Clazz selectByInviteCodeForUpdate(@Param("inviteCode") String inviteCode);
+
+    @Select("SELECT * FROM sys_class WHERE id = #{id} AND is_deleted = 0 FOR UPDATE")
+    Clazz selectByIdForUpdate(@Param("id") Long id);
+
 }

@@ -40,9 +40,26 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements ClazzService {
 
+    private static final int MAX_STUDENTS_LIMIT = 50;
+
     private final UserService userService;
     private final TeacherClassMapper teacherClassMapper;
     private final CourseService courseService;
+
+    @Override
+    public void assertClassNotFull(Long classId) {
+        if (classId == null) {
+            throw new BusinessException("班级ID不能为空");
+        }
+        Clazz clazz = baseMapper.selectByIdForUpdate(classId);
+        if (clazz == null) {
+            throw new BusinessException("班级不存在");
+        }
+        int studentCount = countStudents(classId);
+        if (studentCount >= MAX_STUDENTS_LIMIT) {
+            throw new BusinessException("班级人数已满（50人），无法加入");
+        }
+    }
 
     @Override
     public PageVO<Clazz> pageList(ClazzQueryDTO queryDTO) {
@@ -91,6 +108,7 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
 
         clazz.setDescription(StringUtils.hasText(clazz.getDescription()) ? clazz.getDescription().trim() : null);
         clazz.setInviteCode(generateInviteCode());
+        clazz.setMaxStudents(MAX_STUDENTS_LIMIT);
         clazz.setCurrentCount(0);
         clazz.setCreatedAt(LocalDateTime.now());
         clazz.setUpdatedAt(clazz.getCreatedAt());
@@ -153,6 +171,7 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
                 .set(Clazz::getClassName, clazz.getClassName())
                 .set(Clazz::getDescription, clazz.getDescription())
                 .set(Clazz::getTeacherId, clazz.getTeacherId())
+                .set(Clazz::getMaxStudents, MAX_STUDENTS_LIMIT)
                 .set(Clazz::getStatus, clazz.getStatus())
                 .set(Clazz::getUpdatedAt, clazz.getUpdatedAt());
         boolean updated = this.update(null, updateWrapper);
@@ -250,11 +269,7 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
             throw new BusinessException("邀请码或学生ID不能为空");
         }
 
-        // 根据邀请码查询班级
-        LambdaQueryWrapper<Clazz> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Clazz::getInviteCode, inviteCode);
-        wrapper.eq(Clazz::getIsDeleted, 0);
-        Clazz clazz = this.getOne(wrapper);
+        Clazz clazz = baseMapper.selectByInviteCodeForUpdate(inviteCode);
 
         if (clazz == null) {
             throw new BusinessException("邀请码无效");
@@ -275,6 +290,8 @@ public class ClazzServiceImpl extends ServiceImpl<ClazzMapper, Clazz> implements
             }
             throw new BusinessException("您已加入其他班级，不能重复加入");
         }
+
+        assertClassNotFull(clazz.getId());
         user.setClassId(clazz.getId());
         userService.updateById(user);
         syncStudentCount(clazz.getId());

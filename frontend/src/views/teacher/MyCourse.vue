@@ -274,7 +274,7 @@
             >
               <el-button :loading="coverUploading">上传封面</el-button>
             </el-upload>
-            <div class="form-tip">支持 PNG/JPG/JPEG/GIF/WEBP，大小不超过 5MB</div>
+            <div class="form-tip">支持 PNG/JPG/JPEG/GIF/WEBP，大小不超过 50MB</div>
           </div>
 
           <div>

@@ -6,22 +6,30 @@ import com.example.classhelper.annotation.RequiresRole;
 import com.example.classhelper.common.R;
 import com.example.classhelper.entity.Assignment;
 import com.example.classhelper.entity.AssignmentSubmission;
+import com.example.classhelper.entity.Clazz;
 import com.example.classhelper.entity.User;
 import com.example.classhelper.exception.BusinessException;
 import com.example.classhelper.mapper.TeacherClassMapper;
 import com.example.classhelper.service.AssignmentService;
 import com.example.classhelper.service.AssignmentSubmissionService;
+import com.example.classhelper.service.ClazzService;
 import com.example.classhelper.service.UserManageService;
 import com.example.classhelper.utils.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RestController
@@ -32,6 +40,7 @@ public class AssignmentSubmissionController {
     private final AssignmentSubmissionService submissionService;
     private final AssignmentService assignmentService;
     private final UserManageService userManageService;
+    private final ClazzService clazzService;
     private final TeacherClassMapper teacherClassMapper;
 
     @GetMapping("/page")
@@ -222,6 +231,75 @@ public class AssignmentSubmissionController {
         return R.ok(submission);
     }
 
+    @GetMapping("/teacher/grade-overview")
+    @RequiresRole("teacher")
+    public R<Map<String, Object>> getTeacherGradeOverview(
+            @RequestParam Long classId,
+            @RequestParam(required = false) Long assignmentId) {
+        Long teacherId = requireCurrentUserId();
+        if (classId == null || classId <= 0) {
+            throw new BusinessException(400, "班级ID不能为空");
+        }
+
+        Set<Long> teacherClassIds = getTeacherClassIds(teacherId);
+        if (!teacherClassIds.contains(classId)) {
+            throw new BusinessException(403, "无权查看该班级成绩数据");
+        }
+
+        List<Assignment> assignments = assignmentService.lambdaQuery()
+                .eq(Assignment::getTeacherId, teacherId)
+                .eq(Assignment::getClassId, classId)
+                .orderByDesc(Assignment::getCreatedAt)
+                .list();
+        if (assignments.isEmpty()) {
+            return R.ok(buildEmptyGradeOverview(classId, assignmentId));
+        }
+
+        Map<Long, Assignment> assignmentMap = assignments.stream()
+                .filter(item -> item.getId() != null)
+                .collect(Collectors.toMap(Assignment::getId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
+
+        List<Long> assignmentIds = new ArrayList<>(assignmentMap.keySet());
+        if (assignmentId != null) {
+            if (!assignmentMap.containsKey(assignmentId)) {
+                throw new BusinessException(403, "无权查看该作业成绩数据");
+            }
+            assignmentIds = List.of(assignmentId);
+        }
+
+        List<AssignmentSubmission> submissions = submissionService.lambdaQuery()
+                .in(AssignmentSubmission::getAssignmentId, assignmentIds)
+                .eq(AssignmentSubmission::getClassId, classId)
+                .orderByDesc(AssignmentSubmission::getSubmitTime)
+                .orderByDesc(AssignmentSubmission::getId)
+                .list();
+
+        String className = resolveClassName(classId);
+
+        Set<Long> studentIds = submissions.stream()
+                .map(AssignmentSubmission::getStudentId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<Long, User> studentMap = studentIds.isEmpty() ? Map.of() : userManageService.listByIds(studentIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity(), (a, b) -> a));
+
+        List<Map<String, Object>> records = submissions.stream()
+                .map(item -> buildGradeRecord(item, assignmentMap, studentMap, className))
+                .collect(Collectors.toList());
+
+        List<Map<String, Object>> groups = buildGradeGroups(records, assignmentMap, assignmentId);
+        Map<String, Object> stats = buildGradeStats(submissions);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("classId", classId);
+        result.put("className", className);
+        result.put("assignmentId", assignmentId);
+        result.put("records", records);
+        result.put("groups", groups);
+        result.put("stats", stats);
+        return R.ok(result);
+    }
+
     private void applySubmissionScope(LambdaQueryWrapper<AssignmentSubmission> wrapper,
                                       Long currentUserId,
                                       List<String> roles,
@@ -307,6 +385,110 @@ public class AssignmentSubmissionController {
             throw new BusinessException(401, "请先登录");
         }
         return currentUserId;
+    }
+
+    private Map<String, Object> buildEmptyGradeOverview(Long classId, Long assignmentId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("classId", classId);
+        result.put("className", resolveClassName(classId));
+        result.put("assignmentId", assignmentId);
+        result.put("records", List.of());
+        result.put("groups", List.of());
+        result.put("stats", buildGradeStats(List.of()));
+        return result;
+    }
+
+    private String resolveClassName(Long classId) {
+        if (classId == null) {
+            return "暂无数据";
+        }
+        Clazz clazz = clazzService.getById(classId);
+        if (clazz != null && StringUtils.hasText(clazz.getClassName())) {
+            return clazz.getClassName();
+        }
+        return "暂无数据";
+    }
+
+    private Map<String, Object> buildGradeRecord(AssignmentSubmission submission,
+                                                 Map<Long, Assignment> assignmentMap,
+                                                 Map<Long, User> studentMap,
+                                                 String className) {
+        Assignment assignment = assignmentMap.get(submission.getAssignmentId());
+        User student = studentMap.get(submission.getStudentId());
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", submission.getId());
+        row.put("assignmentId", submission.getAssignmentId());
+        row.put("assignmentTitle", assignment != null ? assignment.getTitle() : "未知作业");
+        row.put("studentId", submission.getStudentId());
+        row.put("studentName", student != null && StringUtils.hasText(student.getRealName()) ? student.getRealName() : "未知学生");
+        row.put("studentNo", student != null && StringUtils.hasText(student.getUsername()) ? student.getUsername() : "暂无数据");
+        row.put("classId", submission.getClassId());
+        row.put("className", className);
+        row.put("submitTime", submission.getSubmitTime());
+        row.put("score", submission.getScore());
+        row.put("status", submission.getStatus());
+        return row;
+    }
+
+    private List<Map<String, Object>> buildGradeGroups(List<Map<String, Object>> records,
+                                                       Map<Long, Assignment> assignmentMap,
+                                                       Long assignmentId) {
+        if (records.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, List<Map<String, Object>>> grouped = records.stream()
+                .collect(Collectors.groupingBy(
+                        item -> (Long) item.get("assignmentId"),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        List<Map<String, Object>> groups = new ArrayList<>();
+        List<Long> orderIds = new ArrayList<>(grouped.keySet());
+        orderIds.sort((a, b) -> {
+            Assignment left = assignmentMap.get(a);
+            Assignment right = assignmentMap.get(b);
+            LocalDateTime leftTime = left == null ? null : left.getCreatedAt();
+            LocalDateTime rightTime = right == null ? null : right.getCreatedAt();
+            return Comparator.nullsLast(LocalDateTime::compareTo).reversed().compare(leftTime, rightTime);
+        });
+        for (Long id : orderIds) {
+            if (assignmentId != null && !Objects.equals(id, assignmentId)) {
+                continue;
+            }
+            Assignment assignment = assignmentMap.get(id);
+            Map<String, Object> group = new LinkedHashMap<>();
+            group.put("assignmentId", id);
+            group.put("assignmentTitle", assignment != null ? assignment.getTitle() : "未知作业");
+            group.put("records", grouped.getOrDefault(id, List.of()));
+            groups.add(group);
+        }
+        return groups;
+    }
+
+    private Map<String, Object> buildGradeStats(List<AssignmentSubmission> submissions) {
+        long submittedCount = submissions.size();
+        List<AssignmentSubmission> graded = submissions.stream()
+                .filter(item -> Objects.equals(item.getStatus(), 1))
+                .collect(Collectors.toList());
+        long gradedCount = graded.size();
+        double avgScore = graded.stream()
+                .filter(item -> item.getScore() != null)
+                .mapToInt(AssignmentSubmission::getScore)
+                .average()
+                .orElse(0D);
+        long passCount = graded.stream()
+                .filter(item -> item.getScore() != null && item.getScore() >= 60)
+                .count();
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("submittedCount", submittedCount);
+        stats.put("gradedCount", gradedCount);
+        stats.put("avgScore", String.format(Locale.ROOT, "%.1f", avgScore));
+        stats.put("passRate", gradedCount > 0
+                ? String.format(Locale.ROOT, "%.1f", passCount * 100.0 / gradedCount)
+                : "0.0");
+        return stats;
     }
 
 }

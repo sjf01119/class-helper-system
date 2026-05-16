@@ -1,22 +1,23 @@
 # 任务计划
 
 ## 目标
-- 修复教师端课程详情页加载失败问题，恢复课程详情中的作业列表、学生列表和成绩统计加载。
-- 保持作业/作业提交表对旧数据库结构的兼容性，避免因缺列触发 `/assignment/page` 500。
-- 在不破坏现有页面的前提下，优先通过启动修表逻辑自动补齐兼容字段。
+- 结合当前学习辅助系统项目的真实模块与角色边界，批量生成适合论文排版的业务流程图。
+- 各流程图统一采用黑白风格、`graph TD` 语法、开始/结束椭圆、步骤矩形、判断菱形。
+- 覆盖用户指定的全部模块，并保证每张图都包含开始、核心操作、系统校验/判断、成功/失败分支、结束。
 
 ## 阶段
-- [x] 阶段1：定位课程详情加载失败的真实请求与落点
-- [x] 阶段2：排查后端 `/assignment/page` 与旧库兼容缺口
-- [x] 阶段3：补充 `assignment` / `assignment_submission` 启动修表逻辑
-- [in_progress] 阶段4：整理验证与恢复步骤
+- [complete] 阶段1：梳理路由、页面、项目文档中的模块职责与角色范围
+- [in_progress] 阶段2：提炼系统总体模块结构、三端模块边界与核心业务闭环
+- [pending] 阶段3：输出可直接用于论文的 Mermaid 系统模块设计图代码
 
 ## 决策记录
-- `CourseDetail.vue` 的报错提示覆盖了整个初始化流程，但本次真实失败点是 `loadHomeworkData()` 内的 `/assignment/page` 请求。
-- 旧数据库最可能缺少 `assignment.course_id`、`assignment.content`、`assignment_submission.status`、`assignment_submission.submit_time`、`is_deleted` 等新链路依赖字段。
-- 优先在 `FixClassNameRunner` 中补齐兼容字段，比要求用户手工执行多条 SQL 更稳妥。
+- 以 `frontend/src/router/index.ts` 确认系统真实模块入口与角色归属。
+- 以 `docs/project/PROJECT_DOCUMENT.md` 与 `docs/project/project_description_template.md` 作为模块职责与业务主干的语义依据。
+- 流程图以“论文友好、主干清晰”为原则，不拆分过细实现细节，但保持成功/失败闭环。
+- 若同名模块存在教师端与学生端不同入口，则按当前项目最核心业务语义抽象为一个模块流程图。
+- 本轮优先输出“系统模块设计图”而非细粒度页面流程图，结构分为总体架构、角色功能模块、教学闭环三类。
 
 ## 错误记录
 | 错误 | 尝试 | 结论 |
 |---|---|---|
-| 后端 `mvn` 不可用 | 1 | 当前环境未安装全局 Maven，需改用本机已安装 Maven 或补充 Maven Wrapper 后再做命令行编译验证 |
+| 暂无 | 0 | 已完成模块清单与职责来源确认，正在提炼主干流程 |

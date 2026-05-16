@@ -13,6 +13,8 @@ import java.util.List;
  */
 public interface ClazzService extends IService<Clazz> {
 
+    void assertClassNotFull(Long classId);
+
     /**
      * 分页查询班级列表
      * @param queryDTO 查询条件

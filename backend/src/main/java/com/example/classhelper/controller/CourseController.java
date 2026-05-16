@@ -137,8 +137,8 @@ public class CourseController {
         if (!contentType.startsWith("image/")) {
             throw new BusinessException(400, "课程封面仅支持图片格式");
         }
-        if (file.getSize() > 5L * 1024 * 1024) {
-            throw new BusinessException(400, "课程封面大小不能超过5MB");
+        if (file.getSize() > 50L * 1024 * 1024) {
+            throw new BusinessException(400, "课程封面大小不能超过50MB");
         }
         String originalName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename().toLowerCase() : "";
         if (!(originalName.endsWith(".png") || originalName.endsWith(".jpg") || originalName.endsWith(".jpeg")

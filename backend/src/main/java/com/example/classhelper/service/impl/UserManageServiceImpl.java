@@ -153,6 +153,9 @@ public class UserManageServiceImpl extends ServiceImpl<UserMapper, User> impleme
         if (!CollectionUtils.isEmpty(dto.getRoles()) && dto.getRoles().contains("teacher")) {
             user.setClassId(null);
         }
+        if (!CollectionUtils.isEmpty(dto.getRoles()) && dto.getRoles().contains("student") && user.getClassId() != null) {
+            clazzService.assertClassNotFull(user.getClassId());
+        }
         
         // 密码加密
         if (!StringUtils.hasText(dto.getPassword())) {
@@ -226,6 +229,9 @@ public class UserManageServiceImpl extends ServiceImpl<UserMapper, User> impleme
         }
         if (newIsTeacher) {
             user.setClassId(null);
+        }
+        if (newIsStudent && user.getClassId() != null && (oldClassId == null || !oldClassId.equals(user.getClassId()))) {
+            clazzService.assertClassNotFull(user.getClassId());
         }
         user.setUpdatedAt(LocalDateTime.now());
 

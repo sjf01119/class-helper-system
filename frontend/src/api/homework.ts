@@ -138,12 +138,52 @@ export interface AssignmentStatsVO {
   submitRate: string
 }
 
+export interface GradeOverviewRowVO {
+  id: number
+  assignmentId: number
+  assignmentTitle: string
+  studentId: number
+  studentName: string
+  studentNo: string
+  classId: number
+  className: string
+  submitTime?: string
+  score?: number
+  status: number
+}
+
+export interface GradeOverviewGroupVO {
+  assignmentId: number
+  assignmentTitle: string
+  records: GradeOverviewRowVO[]
+}
+
+export interface GradeOverviewStatsVO {
+  submittedCount: number
+  gradedCount: number
+  avgScore: string
+  passRate: string
+}
+
+export interface TeacherGradeOverviewVO {
+  classId: number
+  className: string
+  assignmentId?: number
+  records: GradeOverviewRowVO[]
+  groups: GradeOverviewGroupVO[]
+  stats: GradeOverviewStatsVO
+}
+
 export const getHomeworkSubmissions = (homeworkId: number, params?: { current?: number; size?: number }) => {
   return request.get<PageResult<HomeworkSubmissionVO>>(`/assignment/${homeworkId}/submissions`, { params })
 }
 
 export const getHomeworkStats = (homeworkId: number) => {
   return request.get<AssignmentStatsVO>(`/assignment/${homeworkId}/stats`)
+}
+
+export const getTeacherGradeOverview = (params: { classId: number; assignmentId?: number }) => {
+  return request.get<TeacherGradeOverviewVO>('/submission/teacher/grade-overview', { params })
 }
 
 export const gradeHomework = (data: GradeHomeworkDTO) => {

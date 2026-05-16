@@ -21,7 +21,7 @@
         <el-form-item label="作业">
           <el-select
             v-model="filters.assignmentId"
-            placeholder="请选择作业"
+            placeholder="全部作业（可不选）"
             clearable
             style="width: 260px"
             @change="handleQuery"
@@ -69,27 +69,34 @@
     </el-row>
 
     <el-card shadow="never">
-      <el-table :data="tableData" v-loading="loading" border stripe>
-        <el-table-column type="index" label="序号" width="64" align="center" />
-        <el-table-column prop="assignmentTitle" label="作业标题" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="studentName" label="学生姓名" width="120" />
-        <el-table-column prop="studentNo" label="学号" width="140" />
-        <el-table-column prop="className" label="班级" width="140" />
-        <el-table-column prop="submitTime" label="提交时间" width="170" />
-        <el-table-column label="得分" width="100" align="center">
-          <template #default="{ row }">
-            {{ row.score ?? '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="110" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'warning'">
-              {{ row.status === 1 ? '已评分' : '待评分' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!loading && tableData.length === 0" description="暂无成绩数据" />
+      <div v-loading="loading">
+        <template v-if="groupedTableData.length > 0">
+          <div v-for="group in groupedTableData" :key="group.assignmentId" class="grade-group">
+            <div class="group-title">{{ group.assignmentTitle }}</div>
+            <el-table :data="group.records" border stripe>
+              <el-table-column type="index" label="序号" width="64" align="center" />
+              <el-table-column prop="assignmentTitle" label="作业标题" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="studentName" label="学生姓名" width="120" />
+              <el-table-column prop="studentNo" label="学号" width="140" />
+              <el-table-column prop="className" label="班级" width="140" />
+              <el-table-column prop="submitTime" label="提交时间" width="170" />
+              <el-table-column label="得分" width="100" align="center">
+                <template #default="{ row }">
+                  {{ row.score ?? '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="110" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.status === 1 ? 'success' : 'warning'">
+                    {{ row.status === 1 ? '已评分' : '待评分' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </template>
+        <el-empty v-if="!loading && groupedTableData.length === 0" description="暂无成绩数据" />
+      </div>
     </el-card>
   </div>
 </template>
@@ -97,10 +104,8 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import request from '@/utils/request'
 import { getMyTeacherClasses, type ClassVO } from '@/api/class'
-import { getClassStudents, type UserVO } from '@/api/user'
-import { getHomeworkListByClassId, getHomeworkStats, type AssignmentStatsVO } from '@/api/homework'
+import { getHomeworkListByClassId, getTeacherGradeOverview, type GradeOverviewGroupVO } from '@/api/homework'
 
 interface AssignmentVO {
   id: number
@@ -108,35 +113,11 @@ interface AssignmentVO {
   classId?: number
 }
 
-interface SubmissionVO {
-  id: number
-  assignmentId: number
-  studentId: number
-  classId: number
-  score?: number
-  status: number
-  submitTime?: string
-}
-
-interface SubmissionPage {
-  records?: SubmissionVO[]
-}
-
-interface GradeRow {
-  assignmentTitle: string
-  studentName: string
-  studentNo: string
-  className: string
-  submitTime: string
-  score?: number
-  status: number
-}
-
 const loading = ref(false)
 const route = useRoute()
 const classOptions = ref<ClassVO[]>([])
 const assignmentOptions = ref<AssignmentVO[]>([])
-const tableData = ref<GradeRow[]>([])
+const groupedTableData = ref<GradeOverviewGroupVO[]>([])
 
 const filters = reactive({
   classId: undefined as number | undefined,
@@ -169,24 +150,18 @@ const loadClassOptions = async () => {
 const resetGradeView = () => {
   assignmentOptions.value = []
   filters.assignmentId = undefined
-  tableData.value = []
+  groupedTableData.value = []
   resetStats()
 }
 
 const loadAssignmentsByClass = async (classId: number, preferredAssignmentId?: number) => {
   const list = (await getHomeworkListByClassId(classId)) || []
   assignmentOptions.value = list
-  if (list.length === 0) {
-    filters.assignmentId = undefined
-    return
-  }
-  const matchedAssignment = preferredAssignmentId
-    ? list.find(item => item.id === preferredAssignmentId)
-    : undefined
-  filters.assignmentId = matchedAssignment?.id || list[0].id
+  const matchedAssignment = preferredAssignmentId ? list.find(item => item.id === preferredAssignmentId) : undefined
+  filters.assignmentId = matchedAssignment?.id
 }
 
-const applyStats = (statsRes?: AssignmentStatsVO) => {
+const applyStats = (statsRes?: { submittedCount: number; gradedCount: number; avgScore: string; passRate: string }) => {
   stats.submittedCount = statsRes?.submittedCount || 0
   stats.gradedCount = statsRes?.gradedCount || 0
   stats.avgScore = statsRes?.avgScore || '0.0'
@@ -194,40 +169,26 @@ const applyStats = (statsRes?: AssignmentStatsVO) => {
 }
 
 const handleQuery = async () => {
-  if (!filters.classId || !filters.assignmentId) {
-    tableData.value = []
+  if (!filters.classId) {
+    groupedTableData.value = []
     resetStats()
     return
   }
 
   loading.value = true
   try {
-    const [students, submissionPage, statsRes] = await Promise.all([
-      getClassStudents(filters.classId),
-      request.get<SubmissionPage>(`/assignment/${filters.assignmentId}/submissions`, {
-        params: { current: 1, size: 500 }
-      }),
-      getHomeworkStats(filters.assignmentId)
-    ])
-
-    const studentMap = new Map<number, UserVO>((students || []).map(item => [item.id, item]))
-    const className = classOptions.value.find(item => item.id === filters.classId)?.className || '暂无数据'
-    const assignmentTitle = assignmentOptions.value.find(item => item.id === filters.assignmentId)?.title || '暂无数据'
-    const submissions = submissionPage?.records || []
-
-    applyStats(statsRes)
-    tableData.value = submissions.map(item => {
-      const student = studentMap.get(item.studentId)
-      return {
-        assignmentTitle,
-        studentName: student?.realName || '未知学生',
-        studentNo: student?.username || '暂无数据',
-        className,
-        submitTime: formatTime(item.submitTime),
-        score: item.score,
-        status: item.status
-      }
+    const overview = await getTeacherGradeOverview({
+      classId: filters.classId,
+      assignmentId: filters.assignmentId
     })
+    applyStats(overview?.stats)
+    groupedTableData.value = (overview?.groups || []).map(group => ({
+      ...group,
+      records: (group.records || []).map(record => ({
+        ...record,
+        submitTime: formatTime(record.submitTime)
+      }))
+    }))
   } finally {
     loading.value = false
   }
@@ -239,9 +200,7 @@ const handleClassChange = async (classId?: number) => {
     return
   }
   await loadAssignmentsByClass(classId)
-  if (filters.assignmentId) {
-    await handleQuery()
-  }
+  await handleQuery()
 }
 
 const handleReset = async () => {
@@ -259,9 +218,7 @@ onMounted(async () => {
       routeClassId,
       !Number.isNaN(routeAssignmentId) && routeAssignmentId > 0 ? routeAssignmentId : undefined
     )
-    if (filters.assignmentId) {
-      await handleQuery()
-    }
+    await handleQuery()
   }
 })
 </script>
@@ -292,6 +249,17 @@ onMounted(async () => {
   margin-top: 8px;
   font-size: 24px;
   font-weight: 700;
+  color: #303133;
+}
+
+.grade-group + .grade-group {
+  margin-top: 20px;
+}
+
+.group-title {
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
   color: #303133;
 }
 </style>
